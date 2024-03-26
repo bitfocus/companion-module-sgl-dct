@@ -1,0 +1,147 @@
+const { Regex } = require('@companion-module/base')
+
+module.exports = {
+	getConfigFields() {
+		let self = this
+
+		return [
+			{
+				type: 'static-text',
+				id: 'info',
+				width: 12,
+				label: 'Information',
+				value: `This module controls an ATOMOne SSM (Single Stream Module) from Dream Chip Technologies.`,
+			},
+			{
+				type: 'static-text',
+				id: 'hr',
+				width: 12,
+				label: '',
+				value: '<hr />',
+			},
+			{
+				type: 'textinput',
+				id: 'host',
+				label: 'IP Address',
+				width: 6,
+				regex: Regex.IP,
+				default: '',
+			},
+			{
+				type: 'textinput',
+				id: 'port',
+				label: 'Port',
+				width: 6,
+				regex: Regex.Port,
+				default: '9001',
+			},
+			{
+				type: 'static-text',
+				id: 'hr',
+				width: 12,
+				label: '',
+				value: '<hr />',
+			},
+			{
+				type: 'dropdown',
+				id: 'buffers',
+				label: 'Buffers',
+				width: 6,
+				default: 4,
+				choices: [
+					{ id: 1, label: '1' },
+					{ id: 2, label: '2' },
+					{ id: 3, label: '3' },
+					{ id: 4, label: '4' },
+				],
+			},
+			{
+				type: 'static-text',
+				id: 'info',
+				width: 12,
+				label: 'Buffer Count',
+				value: 'Warning: Changing the buffer count will automatically delete all recorded data!',
+			},
+			{
+				type: 'static-text',
+				id: 'hr',
+				width: 12,
+				label: '',
+				value: '<hr />',
+			},
+			{
+				type: 'dropdown',
+				id: 'recordingMode',
+				label: 'Recording Mode',
+				width: 4,
+				default: self.CHOICES_RECORDING_MODE[0].id,
+				choices: self.CHOICES_RECORDING_MODE,
+			},
+			{
+				type: 'dropdown',
+				id: 'playbackMode',
+				label: 'Playback Mode',
+				width: 4,
+				default: self.CHOICES_PLAYBACK_MODE[0].id,
+				choices: self.CHOICES_PLAYBACK_MODE,
+			},
+			{
+				type: 'dropdown',
+				id: 'stopMode',
+				label: 'Stop Mode',
+				width: 4,
+				default: self.CHOICES_STOP_MODE[0].id,
+				choices: self.CHOICES_STOP_MODE,
+			},
+			{
+				type: 'static-text',
+				id: 'hr',
+				width: 12,
+				label: '',
+				value: '<hr />',
+			},
+			{
+				type: 'checkbox',
+				id: 'polling',
+				label: 'Enable Polling',
+				width: 3,
+				default: true,
+			},
+			{
+				type: 'static-text',
+				id: 'info-polling',
+				width: 9,
+				label: 'Polling is required for feedbacks and variables.',
+			},
+			{
+				type: 'number',
+				id: 'rate',
+				label: 'Polling Interval (ms)',
+				width: 6,
+				min: 100,
+				max: 60000,
+				default: 1000,
+				isVisible: (config) => config.polling === true,
+			},
+			{
+				type: 'static-text',
+				id: 'hr',
+				width: 12,
+				label: '',
+				value: '<hr />',
+			},
+			{
+				type: 'checkbox',
+				id: 'verbose',
+				label: 'Verbose Logging',
+				width: 3,
+			},
+			{
+				type: 'static-text',
+				id: 'info-verbose',
+				width: 9,
+				label: 'Enable verbose logging for debugging purposes.',
+			},
+		]
+	},
+}
