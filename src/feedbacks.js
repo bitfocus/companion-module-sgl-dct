@@ -41,8 +41,19 @@ module.exports = {
 				let bufferData = self.DATA.buffers.find((bufferData) => bufferData.buffer == buffer)
 
 				if (bufferData) {
-					if (bufferData.status == status) {
-						return true
+					//check first to see if the status is one of the following: 'free', 'used', 'record', 'play', 'pause'
+					switch (bufferData.status.toLowerCase()) {
+						case 'free':
+						case 'used':
+						case 'record':
+						case 'play':
+						case 'pause':
+							if (bufferData.status.toLowerCase() == status) {
+								return true
+							}
+							break
+						default:
+							return false
 					}
 				}
 

@@ -20,7 +20,7 @@
 		"apiVersion": "0.0.0",
 		"entrypoint": "../index.js"
 	},
-	"manufacturer": "ATOMOne",
-	"products": ["SSM-500DCT"],
-	"keywords": ["Slow Motion"]
+	"manufacturer": "SGL",
+	"products": ["DCT"],
+	"keywords": ["Slow Motion", "ATOMOne", "Dream Chip"]
 }

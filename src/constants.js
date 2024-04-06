@@ -47,5 +47,20 @@ module.exports = {
 		{ id: 'record', label: 'Record' },
 		{ id: 'play', label: 'Play' },
 		{ id: 'pause', label: 'Pause' },
+		{ id: 'other', label: 'Other' },
+	],
+
+	CHOICES_VIDEO_MODES: [
+		{ id: '4', label: '1080p30', frameRate: 30 },
+		{ id: '5', label: '1080p25', frameRate: 25 },
+		{ id: '6', label: '1080p24', frameRate: 24 },
+		{ id: '7', label: '1080p23.98', frameRate: 23.98 },
+		{ id: '8', label: '1080p29.97', frameRate: 29.97 },
+		{ id: '9', label: '1080p50', frameRate: 50 },
+		{ id: '10', label: '1080p60', frameRate: 60 },
+		{ id: '11', label: '1080i60', frameRate: 60 },
+		{ id: '12', label: '1080i50', frameRate: 50 },
+		{ id: '13', label: '1080i59.94', frameRate: 59.94 },
+		{ id: '14', label: '1080p59.94', frameRate: 59.94 },
 	],
 }

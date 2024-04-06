@@ -56,6 +56,10 @@ module.exports = {
 		self.sendCommand('play_mode ?')
 		self.sendCommand('stop_mode ?')
 
+		self.sendCommand('video_mode ?')
+		self.sendCommand('phases ?')
+		self.sendCommand('fps ?')
+
 		self.checkVariables()
 	},
 
@@ -111,6 +115,15 @@ module.exports = {
 				break
 			case command.includes('mark_pos'):
 				self.processMarkPos(results)
+				break
+			case command.includes('video_mode'):
+				self.processVideoMode(results)
+				break
+			case command.includes('phases'):
+				self.processPhases(results)
+				break
+			case command.includes('fps'):
+				self.processFPS(results)
 				break
 			default:
 				self.log('debug', `Unknown Response: ${command}`)
@@ -269,7 +282,61 @@ module.exports = {
 		self.checkVariables()
 	},
 
-	play: function (buffer, speed, frame) {
+	processVideoMode: function (videoMode) {
+		let self = this
+
+		//it comes in a string like this: video_mode 4
+		//just get the second part
+		let videoModeArr = videoMode.split(' ')
+		let mode = 0
+
+		if (videoModeArr.length === 2) {
+			mode = parseInt(videoModeArr[1])
+		}
+
+		self.DATA.videoMode = mode
+
+		self.checkVariables()
+	},
+
+	processPhases: function (phases) {
+		let self = this
+
+		//it comes in a string like this: phases 1
+		//just get the second part
+		let phasesArr = phases.split(' ')
+		let phaseValue = 0
+
+		if (phasesArr.length === 2) {
+			phaseValue = parseInt(phasesArr[1])
+		}
+
+		self.DATA.activePhases = phaseValue
+
+		self.checkVariables()
+	},
+
+	processFPS: function (fps) {
+		let self = this
+
+		//it comes in a string like this: fps 30
+		//just get the second part
+		let fpsArr = fps.split(' ')
+		let sensorFpsValue = 0
+		let displayFpsValue = 0
+
+		if (fpsArr.length === 3) {
+			sensorFpsValue = parseInt(fpsArr[1])
+			displayFpsValue = parseInt(fpsArr[2])
+		}
+
+		self.DATA.sensorFps = sensorFpsValue
+		self.DATA.displayFps = displayFpsValue
+
+		self.checkVariables()
+	},
+
+	play: function (buffer, speed, frame = undefined) {
 		let self = this
 
 		if (buffer === 0) {
@@ -278,8 +345,65 @@ module.exports = {
 		}
 
 		self.DATA.currentPlaybackBuffer = buffer
-		self.sendCommand(`play ${buffer} ${speed} ${frame}`)
+		self.DATA.lastSpeed = speed
+		if (frame) {
+			self.sendCommand(`play ${buffer} ${speed} ${frame}`)
+		} else {
+			self.sendCommand(`play ${buffer} ${speed}`)
+		}
 		self.checkVariables()
+	},
+
+	rampPlay: function (buffer, startSpeed, startFrame, rampSpeed, rampFrame, endSpeed, transitionTime) {
+		let self = this
+
+		if (buffer === 0) {
+			//determine the last recorded buffer to use
+			buffer = self.DATA.lastRecordingBuffer
+		}
+
+		self.DATA.currentPlaybackBuffer = buffer
+		self.DATA.lastSpeed = startSpeed
+		self.sendCommand(`play ${buffer} ${startSpeed} ${startFrame}`)
+		self.checkVariables()
+
+		//now start an interval to check the current frame position, and when it reaches or passes the rampFrame, change the speed
+		let interval = setInterval(() => {
+			if (self.DATA.pos >= rampFrame) {
+				self.sendCommand(`speed ${buffer} ${rampSpeed}`)
+				self.DATA.lastSpeed = rampSpeed
+				self.startRamping(buffer, endSpeed, transitionTime)
+				clearInterval(interval)
+			}
+		}, 50) //check every 50ms
+	},
+
+	startRamping: function (buffer, rampSpeed, endSpeed, transitionTime) {
+		let self = this
+
+		let speed = 0
+
+		//determine if we're going up or down
+		if (rampSpeed < endSpeed) {
+			speed = rampSpeed
+		} else {
+			speed = endSpeed
+		}
+
+		//calculate the total number of steps that can occur over the transition time
+		let steps = transitionTime / 50
+		let stepSize = Math.abs(rampSpeed - endSpeed) / steps
+
+		//start the interval
+		let interval = setInterval(() => {
+			if (speed < endSpeed) {
+				speed += stepSize
+				self.sendCommand(`speed ${buffer} ${speed}`)
+				self.DATA.lastSpeed = speed
+			} else {
+				clearInterval(interval)
+			}
+		}, 50) //check every 50ms
 	},
 
 	pause: function () {
@@ -347,6 +471,18 @@ module.exports = {
 		let self = this
 
 		self.sendCommand(`free ${buffer}`)
+	},
+
+	videoMode: function (mode) {
+		let self = this
+
+		self.sendCommand(`video_mode ${mode}`)
+	},
+
+	phases: function (phases) {
+		let self = this
+
+		self.sendCommand(`phases ${phases}`)
 	},
 
 	changeNetworkSettings: function (networkType, ip, subnet, gateway) {

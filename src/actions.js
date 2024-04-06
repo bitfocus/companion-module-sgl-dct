@@ -14,39 +14,271 @@ module.exports = {
 					default: true,
 				},
 				{
+					type: 'checkbox',
+					label: 'Use Current Playback Buffer',
+					id: 'useCurrentPlaybackBuffer',
+					default: false,
+					isVisible: (options) => options.lastRecorded === false,
+				},
+				{
 					type: 'dropdown',
 					label: 'Buffer',
 					id: 'buffer',
 					choices: self.CHOICES_BUFFERS,
 					default: self.CHOICES_BUFFERS[0].id,
 					required: true,
-					isVisible: (options) => options.lastRecorded === false,
+					isVisible: (options) =>
+						options.lastRecorded === false && options.useCurrentPlaybackBuffer === false,
+				},
+				{
+					type: 'checkbox',
+					label: 'Use Custom Speed',
+					id: 'useCustomSpeed',
+					default: false,
+				},
+				{
+					type: 'text',
+					label: 'Speed',
+					id: 'customSpeed',
+					default: 10,
+					useVariables: true,
+					isVisible: (options) => options.useCustomSpeed === true,
 				},
 				{
 					type: 'dropdown',
 					label: 'Speed',
 					id: 'speed',
-					default: 0,
+					default: 10,
 					choices: self.CHOICES_SPEEDS,
+					isVisible: (options) => options.useCustomSpeed === false,
 				},
 				{
-					type: 'number',
+					type: 'textinput',
 					label: 'Frame',
 					id: 'frame',
 					default: 0,
-					min: 0,
+					useVariables: true,
 				},
 			],
 			callback: async function (action) {
 				let buffer = parseInt(action.options.buffer)
 				let speed = action.options.speed
-				let frame = parseInt(action.options.frame)
+				let frame = parseInt(await self.parseVariablesInString(action.options.frame))
 
 				if (action.options.lastRecorded) {
 					buffer = 0
+				} else if (action.options.useCurrentPlaybackBuffer) {
+					buffer = self.DATA.currentPlaybackBuffer
 				}
 
+				if (action.options.useCustomSpeed) {
+					speed = parseInt(await self.parseVariablesInString(action.options.customSpeed))
+				}
+
+				//make sure speed is between -1000 and 1000
+				speed = Math.min(1000, Math.max(-1000, speed))
+
 				self.play(buffer, speed, frame)
+			},
+		}
+
+		actions.increasePlaySpeed = {
+			name: 'Increase Play Speed',
+			options: [
+				{
+					type: 'checkbox',
+					label: 'Use Last Recorded Buffer',
+					id: 'lastRecorded',
+					default: true,
+				},
+				{
+					type: 'checkbox',
+					label: 'Use Current Playback Buffer',
+					id: 'useCurrentPlaybackBuffer',
+					default: false,
+					isVisible: (options) => options.lastRecorded === false,
+				},
+				{
+					type: 'dropdown',
+					label: 'Buffer',
+					id: 'buffer',
+					choices: self.CHOICES_BUFFERS,
+					default: self.CHOICES_BUFFERS[0].id,
+					required: true,
+					isVisible: (options) =>
+						options.lastRecorded === false && options.useCurrentPlaybackBuffer === false,
+				},
+				{
+					type: 'text',
+					label: 'Speed Increase Factor',
+					id: 'speedFactor',
+					default: 10,
+					useVariables: true,
+				},
+			],
+			callback: async function (action) {
+				let buffer = parseInt(action.options.buffer)
+				let speedFactor = parseInt(await self.parseVariablesInString(action.options.speedFactor))
+
+				if (action.options.lastRecorded) {
+					buffer = 0
+				} else if (action.options.useCurrentPlaybackBuffer) {
+					buffer = self.DATA.currentPlaybackBuffer
+				}
+
+				//make sure speed factor is a positive value
+				speedFactor = Math.abs(speedFactor)
+
+				let newSpeed = self.DATA.lastSpeed + speedFactor
+
+				//make sure speed is between -1000 and 1000
+				newSpeed = Math.min(1000, Math.max(-1000, newSpeed))
+
+				self.play(buffer, newSpeed)
+			},
+		}
+
+		actions.decreasePlaySpeed = {
+			name: 'Decrease Play Speed',
+			options: [
+				{
+					type: 'checkbox',
+					label: 'Use Last Recorded Buffer',
+					id: 'lastRecorded',
+					default: true,
+				},
+				{
+					type: 'checkbox',
+					label: 'Use Current Playback Buffer',
+					id: 'useCurrentPlaybackBuffer',
+					default: false,
+					isVisible: (options) => options.lastRecorded === false,
+				},
+				{
+					type: 'dropdown',
+					label: 'Buffer',
+					id: 'buffer',
+					choices: self.CHOICES_BUFFERS,
+					default: self.CHOICES_BUFFERS[0].id,
+					required: true,
+					isVisible: (options) =>
+						options.lastRecorded === false && options.useCurrentPlaybackBuffer === false,
+				},
+				{
+					type: 'text',
+					label: 'Speed Decrease Factor',
+					id: 'speedFactor',
+					default: 10,
+					useVariables: true,
+				},
+			],
+			callback: async function (action) {
+				let buffer = parseInt(action.options.buffer)
+				let speedFactor = parseInt(await self.parseVariablesInString(action.options.speedFactor))
+
+				if (action.options.lastRecorded) {
+					buffer = 0
+				} else if (action.options.useCurrentPlaybackBuffer) {
+					buffer = self.DATA.currentPlaybackBuffer
+				}
+
+				//make sure speed factor is a positive value
+				speedFactor = Math.abs(speedFactor)
+
+				let newSpeed = self.DATA.lastSpeed - speedFactor
+
+				//make sure speed is between -1000 and 1000
+				newSpeed = Math.min(1000, Math.max(-1000, newSpeed))
+
+				self.play(buffer, newSpeed)
+			},
+		}
+
+		actions.rampPlay = {
+			name: 'Ramp Play',
+			options: [
+				{
+					type: 'checkbox',
+					label: 'Use Last Recorded Buffer',
+					id: 'lastRecorded',
+					default: true,
+				},
+				{
+					type: 'checkbox',
+					label: 'Use Current Playback Buffer',
+					id: 'useCurrentPlaybackBuffer',
+					default: false,
+					isVisible: (options) => options.lastRecorded === false,
+				},
+				{
+					type: 'dropdown',
+					label: 'Buffer',
+					id: 'buffer',
+					choices: self.CHOICES_BUFFERS,
+					default: self.CHOICES_BUFFERS[0].id,
+					required: true,
+					isVisible: (options) =>
+						options.lastRecorded === false && options.useCurrentPlaybackBuffer === false,
+				},
+				{
+					type: 'textinput',
+					label: 'Start Speed',
+					id: 'startSpeed',
+					default: 10,
+					useVariables: true,
+				},
+				{
+					type: 'textinput',
+					label: 'Start Frame',
+					id: 'startFrame',
+					default: 0,
+					useVariables: true,
+				},
+				{
+					type: 'textinput',
+					label: 'Ramp Speed',
+					id: 'rampSpeed',
+					default: -10,
+				},
+				{
+					type: 'textinput',
+					label: 'Ramp Frame',
+					id: 'rampFrame',
+					default: 0,
+					useVariables: true,
+				},
+				{
+					type: 'textinput',
+					label: 'End Speed',
+					id: 'endSpeed',
+					default: -1000,
+					useVariables: true,
+				},
+				{
+					type: 'textinput',
+					label: 'Transition Time (in seconds) from Ramp Speed to End Speed',
+					id: 'transitionTime',
+					default: 1.5,
+					useVariables: true,
+				},
+			],
+			callback: async function (action) {
+				let buffer = parseInt(action.options.buffer)
+
+				let startSpeed = parseInt(await self.parseVariablesInString(action.options.startSpeed))
+				let startFrame = parseInt(await self.parseVariablesInString(action.options.startFrame))
+				let rampSpeed = parseInt(await self.parseVariablesInString(action.options.rampSpeed))
+				let rampFrame = parseInt(await self.parseVariablesInString(action.options.rampFrame))
+				let endSpeed = parseInt(await self.parseVariablesInString(action.options.endSpeed))
+				let transitionTime = parseFloat(await self.parseVariablesInString(action.options.transitionTime))
+
+				if (action.options.lastRecorded) {
+					buffer = 0
+				} else if (action.options.useCurrentPlaybackBuffer) {
+					buffer = self.DATA.currentPlaybackBuffer
+				}
+
+				self.rampPlay(buffer, startSpeed, startFrame, rampSpeed, rampFrame, endSpeed, transitionTime)
 			},
 		}
 
@@ -246,7 +478,7 @@ module.exports = {
 		}
 
 		actions.freeBuffer = {
-			name: 'Free Buffer',
+			name: 'Free Buffer(s)',
 			options: [
 				{
 					type: 'checkbox',
@@ -255,23 +487,104 @@ module.exports = {
 					default: false,
 				},
 				{
+					type: 'checkbox',
+					label: 'Choose by Variable Value',
+					id: 'chooseByVariable',
+					default: false,
+					isVisible: (options) => options.freeAll === false,
+				},
+				{
+					type: 'textinput',
+					label: 'Buffer',
+					id: 'bufferVar',
+					default: '0',
+					useVariables: true,
+					isVisible: (options) => options.chooseByVariable === true,
+				},
+				{
 					type: 'dropdown',
 					label: 'Buffer',
 					id: 'buffer',
 					choices: self.CHOICES_BUFFERS,
 					default: self.CHOICES_BUFFERS[0].id,
 					required: true,
-					isVisible: (options) => options.freeAll === false,
+					isVisible: (options) => options.freeAll === false && options.chooseByVariable === false,
 				},
 			],
 			callback: async function (action) {
-				let buffer = parseInt(action.options.buffer)
+				let buffer = 0
 
 				if (action.options.freeAll) {
 					buffer = 0
+				} else if (action.options.chooseByVariable) {
+					buffer = parseInt(await self.parseVariablesInString(action.options.bufferVar))
+				} else {
+					buffer = parseInt(action.options.buffer)
 				}
 
 				self.freeBuffer(buffer)
+			},
+		}
+
+		actions.setVideoMode = {
+			name: 'Set Video Mode',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Video Mode',
+					id: 'mode',
+					choices: self.CHOICES_VIDEO_MODES,
+					default: self.CHOICES_VIDEO_MODES[0].id,
+					required: true,
+				},
+			],
+			callback: async function (action) {
+				let mode = action.options.mode
+				self.setVideoMode(mode)
+			},
+		}
+
+		actions.phases = {
+			name: 'Set Active Phases and Frame Rate',
+			options: [
+				{
+					type: 'checkbox',
+					label: 'Choose Active Phase(s) Number by Variable',
+					id: 'choosePhasesByVariable',
+					default: false,
+				},
+				{
+					type: 'textinput',
+					label: 'Active Phases (SDI outputs)',
+					id: 'phasesVar',
+					default: '1',
+					useVariables: true,
+					isVisible: (options) => options.choosePhasesByVariable === true,
+				},
+				{
+					type: 'dropdown',
+					label: 'Active Phases (SDI outputs)',
+					id: 'phases',
+					choices: [
+						{ id: 1, label: '1' },
+						{ id: 2, label: '2' },
+						{ id: 3, label: '3' },
+						{ id: 4, label: '4' },
+					],
+					default: 1,
+					isVisible: (options) => options.choosePhasesByVariable === false,
+				},
+			],
+			callback: async function (action) {
+				let phases = 1
+
+				if (action.options.choosePhasesByVariable) {
+					phases = parseInt(await self.parseVariablesInString(action.options.phasesVar))
+				} else {
+					phases = parseInt(action.options.phases)
+				}
+
+				self.phases(phases)
 			},
 		}
 

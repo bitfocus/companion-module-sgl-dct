@@ -31,6 +31,7 @@ class DCTInstance extends InstanceBase {
 			buffers: [],
 			currentRecordingBuffer: 0,
 			currentPlaybackBuffer: 0,
+			lastSpeed: 0,
 			recordingMode: '',
 			playbackMode: '',
 			stopMode: '',

@@ -44,7 +44,7 @@ module.exports = {
 			},
 			{
 				type: 'dropdown',
-				id: 'buffers',
+				id: 'recordingBuffers',
 				label: 'Buffers',
 				width: 6,
 				default: 4,
@@ -61,6 +61,19 @@ module.exports = {
 				width: 12,
 				label: 'Buffer Count',
 				value: 'Warning: Changing the buffer count will automatically delete all recorded data!',
+			},
+			{
+				type: 'textinput',
+				id: 'unusedBufferText',
+				label: 'Unused Buffer Text',
+				width: 4,
+				default: 'DISABLED',
+			},
+			{
+				type: 'static-text',
+				id: 'unusedInfo',
+				width: 8,
+				label: 'Text to display for unused buffer variables.',
 			},
 			{
 				type: 'static-text',
@@ -118,7 +131,7 @@ module.exports = {
 				id: 'rate',
 				label: 'Polling Interval (ms)',
 				width: 6,
-				min: 100,
+				min: 20,
 				max: 60000,
 				default: 1000,
 				isVisible: (config) => config.polling === true,

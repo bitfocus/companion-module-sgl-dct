@@ -18,7 +18,8 @@
 		"url": "git+https://github.com/bitfocus/companion-module-sgl-dct.git"
 	},
 	"devDependencies": {
-		"@companion-module/tools": "^1.5.0"
+		"@companion-module/tools": "^1.5.0",
+		"prettier": "^3.2.5"
 	},
 	"prettier": "@companion-module/tools/.prettierrc.json",
 	"lint-staged": {
