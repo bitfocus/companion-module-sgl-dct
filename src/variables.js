@@ -32,11 +32,13 @@ module.exports = {
 		//set the unused text for unused buffer variables
 		let i = 4 - self.config.buffers
 		let unusedBufferText = self.config.unusedBufferText
+		let variableValues = {}
 		for (i; i <= 4; i++) {
-			self.setVariable(`bufferFramesRecorded_${i}`, unusedBufferText)
-			self.setVariable(`bufferFramesAvailable_${i}`, unusedBufferText)
-			self.setVariable(`bufferStatus${i}`, unusedBufferText)
+			variableValues[`bufferFramesRecorded_${i}`] = unusedBufferText
+			variableValues[`bufferFramesAvailable_${i}`] = unusedBufferText
+			variableValues[`bufferStatus${i}`] = unusedBufferText
 		}
+		self.setVariableValues(variableValues)
 	},
 
 	checkVariables: function () {

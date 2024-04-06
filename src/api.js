@@ -354,7 +354,7 @@ module.exports = {
 		self.checkVariables()
 	},
 
-	rampPlay: function (buffer, startSpeed, startFrame, rampSpeed, rampFrame, endSpeed, transitionTime) {
+	/*rampPlay: function (buffer, startSpeed, startFrame, rampSpeed, rampFrame, endSpeed, transitionTime) {
 		let self = this
 
 		if (buffer === 0) {
@@ -404,7 +404,7 @@ module.exports = {
 				clearInterval(interval)
 			}
 		}, 50) //check every 50ms
-	},
+	},*/
 
 	pause: function () {
 		let self = this

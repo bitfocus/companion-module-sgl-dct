@@ -21,6 +21,22 @@ module.exports = {
 					isVisible: (options) => options.lastRecorded === false,
 				},
 				{
+					type: 'checkbox',
+					label: 'Choose Buffer by Variable Value',
+					id: 'chooseBufferByVariable',
+					default: false,
+					isVisible: (options) =>
+						options.lastRecorded === false && options.useCurrentPlaybackBuffer === false,
+				},
+				{
+					type: 'textinput',
+					label: 'Buffer Number (1-4)',
+					id: 'bufferVar',
+					default: '0',
+					useVariables: true,
+					isVisible: (options) => options.chooseBufferByVariable === true,
+				},
+				{
 					type: 'dropdown',
 					label: 'Buffer',
 					id: 'buffer',
@@ -28,7 +44,15 @@ module.exports = {
 					default: self.CHOICES_BUFFERS[0].id,
 					required: true,
 					isVisible: (options) =>
-						options.lastRecorded === false && options.useCurrentPlaybackBuffer === false,
+						options.lastRecorded === false &&
+						options.useCurrentPlaybackBuffer === false &&
+						options.chooseBufferByVariable === false,
+				},
+				{
+					type: 'static-text',
+					label: '',
+					id: 'hr1',
+					value: '<hr />',
 				},
 				{
 					type: 'checkbox',
@@ -37,8 +61,8 @@ module.exports = {
 					default: false,
 				},
 				{
-					type: 'text',
-					label: 'Speed',
+					type: 'textinput',
+					label: 'Speed (-1000 to 1000)',
 					id: 'customSpeed',
 					default: 10,
 					useVariables: true,
@@ -53,11 +77,24 @@ module.exports = {
 					isVisible: (options) => options.useCustomSpeed === false,
 				},
 				{
+					type: 'static-text',
+					label: '',
+					id: 'hr2',
+					value: '<hr />',
+				},
+				{
+					type: 'checkbox',
+					label: 'Specify Frame',
+					id: 'specifyFrame',
+					default: false,
+				},
+				{
 					type: 'textinput',
 					label: 'Frame',
 					id: 'frame',
 					default: 0,
 					useVariables: true,
+					isVisible: (options) => options.specifyFrame === true,
 				},
 			],
 			callback: async function (action) {
@@ -69,6 +106,8 @@ module.exports = {
 					buffer = 0
 				} else if (action.options.useCurrentPlaybackBuffer) {
 					buffer = self.DATA.currentPlaybackBuffer
+				} else if (action.options.chooseBufferByVariable) {
+					buffer = parseInt(await self.parseVariablesInString(action.options.bufferVar))
 				}
 
 				if (action.options.useCustomSpeed) {
@@ -78,6 +117,10 @@ module.exports = {
 				//make sure speed is between -1000 and 1000
 				speed = Math.min(1000, Math.max(-1000, speed))
 
+				if (action.options.specifyFrame) {
+					frame = undefined
+				}
+
 				self.play(buffer, speed, frame)
 			},
 		}
@@ -86,30 +129,7 @@ module.exports = {
 			name: 'Increase Play Speed',
 			options: [
 				{
-					type: 'checkbox',
-					label: 'Use Last Recorded Buffer',
-					id: 'lastRecorded',
-					default: true,
-				},
-				{
-					type: 'checkbox',
-					label: 'Use Current Playback Buffer',
-					id: 'useCurrentPlaybackBuffer',
-					default: false,
-					isVisible: (options) => options.lastRecorded === false,
-				},
-				{
-					type: 'dropdown',
-					label: 'Buffer',
-					id: 'buffer',
-					choices: self.CHOICES_BUFFERS,
-					default: self.CHOICES_BUFFERS[0].id,
-					required: true,
-					isVisible: (options) =>
-						options.lastRecorded === false && options.useCurrentPlaybackBuffer === false,
-				},
-				{
-					type: 'text',
+					type: 'textinput',
 					label: 'Speed Increase Factor',
 					id: 'speedFactor',
 					default: 10,
@@ -117,14 +137,8 @@ module.exports = {
 				},
 			],
 			callback: async function (action) {
-				let buffer = parseInt(action.options.buffer)
+				let buffer = self.DATA.currentPlaybackBuffer
 				let speedFactor = parseInt(await self.parseVariablesInString(action.options.speedFactor))
-
-				if (action.options.lastRecorded) {
-					buffer = 0
-				} else if (action.options.useCurrentPlaybackBuffer) {
-					buffer = self.DATA.currentPlaybackBuffer
-				}
 
 				//make sure speed factor is a positive value
 				speedFactor = Math.abs(speedFactor)
@@ -142,30 +156,7 @@ module.exports = {
 			name: 'Decrease Play Speed',
 			options: [
 				{
-					type: 'checkbox',
-					label: 'Use Last Recorded Buffer',
-					id: 'lastRecorded',
-					default: true,
-				},
-				{
-					type: 'checkbox',
-					label: 'Use Current Playback Buffer',
-					id: 'useCurrentPlaybackBuffer',
-					default: false,
-					isVisible: (options) => options.lastRecorded === false,
-				},
-				{
-					type: 'dropdown',
-					label: 'Buffer',
-					id: 'buffer',
-					choices: self.CHOICES_BUFFERS,
-					default: self.CHOICES_BUFFERS[0].id,
-					required: true,
-					isVisible: (options) =>
-						options.lastRecorded === false && options.useCurrentPlaybackBuffer === false,
-				},
-				{
-					type: 'text',
+					type: 'textinput',
 					label: 'Speed Decrease Factor',
 					id: 'speedFactor',
 					default: 10,
@@ -173,14 +164,8 @@ module.exports = {
 				},
 			],
 			callback: async function (action) {
-				let buffer = parseInt(action.options.buffer)
+				let buffer = self.DATA.currentPlaybackBuffer
 				let speedFactor = parseInt(await self.parseVariablesInString(action.options.speedFactor))
-
-				if (action.options.lastRecorded) {
-					buffer = 0
-				} else if (action.options.useCurrentPlaybackBuffer) {
-					buffer = self.DATA.currentPlaybackBuffer
-				}
 
 				//make sure speed factor is a positive value
 				speedFactor = Math.abs(speedFactor)
@@ -194,7 +179,7 @@ module.exports = {
 			},
 		}
 
-		actions.rampPlay = {
+		/*actions.rampPlay = {
 			name: 'Ramp Play',
 			options: [
 				{
@@ -280,7 +265,7 @@ module.exports = {
 
 				self.rampPlay(buffer, startSpeed, startFrame, rampSpeed, rampFrame, endSpeed, transitionTime)
 			},
-		}
+		}*/
 
 		actions.pause = {
 			name: 'Pause',
@@ -308,13 +293,28 @@ module.exports = {
 					default: true,
 				},
 				{
+					type: 'checkbox',
+					label: 'Choose Buffer by Variable Value',
+					id: 'chooseBufferByVariable',
+					default: false,
+					isVisible: (options) => options.nextAvailable === false,
+				},
+				{
+					type: 'textinput',
+					label: 'Buffer Number (1-4)',
+					id: 'bufferVar',
+					default: '0',
+					useVariables: true,
+					isVisible: (options) => options.chooseBufferByVariable === true,
+				},
+				{
 					type: 'dropdown',
 					label: 'Select Buffer',
 					id: 'buffer',
 					choices: self.CHOICES_BUFFERS,
 					default: self.CHOICES_BUFFERS[0].id,
 					required: true,
-					isVisible: (options) => options.nextAvailable === false,
+					isVisible: (options) => options.nextAvailable === false && options.chooseBufferByVariable === false,
 				},
 			],
 			callback: async function (action) {
@@ -323,6 +323,8 @@ module.exports = {
 
 				if (nextAvailable) {
 					buffer = 0
+				} else if (action.options.chooseBufferByVariable) {
+					buffer = parseInt(await self.parseVariablesInString(action.options.bufferVar))
 				}
 
 				self.record(buffer)
@@ -488,18 +490,18 @@ module.exports = {
 				},
 				{
 					type: 'checkbox',
-					label: 'Choose by Variable Value',
-					id: 'chooseByVariable',
+					label: 'Choose Buffer by Variable Value',
+					id: 'chooseBufferByVariable',
 					default: false,
 					isVisible: (options) => options.freeAll === false,
 				},
 				{
 					type: 'textinput',
-					label: 'Buffer',
+					label: 'Buffer Number (1-4)',
 					id: 'bufferVar',
 					default: '0',
 					useVariables: true,
-					isVisible: (options) => options.chooseByVariable === true,
+					isVisible: (options) => options.chooseBufferByVariable === true,
 				},
 				{
 					type: 'dropdown',
@@ -508,7 +510,7 @@ module.exports = {
 					choices: self.CHOICES_BUFFERS,
 					default: self.CHOICES_BUFFERS[0].id,
 					required: true,
-					isVisible: (options) => options.freeAll === false && options.chooseByVariable === false,
+					isVisible: (options) => options.freeAll === false && options.chooseBufferByVariable === false,
 				},
 			],
 			callback: async function (action) {
@@ -516,7 +518,7 @@ module.exports = {
 
 				if (action.options.freeAll) {
 					buffer = 0
-				} else if (action.options.chooseByVariable) {
+				} else if (action.options.chooseBufferByVariable) {
 					buffer = parseInt(await self.parseVariablesInString(action.options.bufferVar))
 				} else {
 					buffer = parseInt(action.options.buffer)
