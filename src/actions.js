@@ -537,7 +537,6 @@ module.exports = {
 					id: 'mode',
 					choices: self.CHOICES_VIDEO_MODES,
 					default: self.CHOICES_VIDEO_MODES[0].id,
-					required: true,
 				},
 			],
 			callback: async function (action) {
@@ -546,7 +545,7 @@ module.exports = {
 			},
 		}
 
-		actions.phases = {
+		/*actions.phases = {
 			name: 'Set Active Phases and Frame Rate',
 			options: [
 				{
@@ -587,6 +586,45 @@ module.exports = {
 				}
 
 				self.phases(phases)
+			},
+		}*/
+
+		actions.setFrameRate = {
+			name: 'Set Frame Rate (FPS)',
+			options: [
+				{
+					type: 'checkbox',
+					label: 'Choose Frame Rate by Variable',
+					id: 'chooseFPSByVariable',
+					default: false,
+				},
+				{
+					type: 'textinput',
+					label: 'Frame Rate (FPS)',
+					id: 'frameRateVar',
+					default: '1',
+					useVariables: true,
+					isVisible: (options) => options.chooseFPSByVariable === true,
+				},
+				{
+					type: 'dropdown',
+					label: 'Frame Rate',
+					id: 'frameRate',
+					choices: self.CHOICES_FRAME_RATES,
+					default: self.CHOICES_FRAME_RATES[0].id,
+					isVisible: (options) => options.chooseFPSByVariable === false,
+				},
+			],
+			callback: async function (action) {
+				let frameRate = 0
+
+				if (action.options.choosePhasesByVariable) {
+					frameRate = parseInt(await self.parseVariablesInString(action.options.frameRateVar))
+				} else {
+					frameRate = parseInt(action.options.frameRate)
+				}
+
+				self.frameRate(frameRate)
 			},
 		}
 

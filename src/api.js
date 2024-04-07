@@ -7,6 +7,7 @@ module.exports = {
 		let self = this
 
 		if (self.WS) {
+			self.stopInterval() //stop any existing intervals
 			self.closeConnection() //close any existing connections
 		}
 
@@ -20,7 +21,7 @@ module.exports = {
 			self.WS.on('open', () => {
 				console.log('connected')
 				self.updateStatus(InstanceStatus.Ok)
-				self.setBufferCount(self.config.buffers)
+				self.setBufferCount(self.config.recordingBuffers)
 				self.changeMode('rec_mode', self.config.recordingMode)
 				self.changeMode('play_mode', self.config.playbackMode)
 				self.changeMode('stop_mode', self.config.stopMode)
@@ -30,7 +31,7 @@ module.exports = {
 			})
 
 			self.WS.on('message', (data) => {
-				self.processData(data)
+				self.processData.bind(self)(data)
 			})
 		}
 	},
@@ -51,13 +52,14 @@ module.exports = {
 	getData: function () {
 		let self = this
 
-		self.sendCommand('version')
+		//self.sendCommand('version')
 		self.sendCommand('rec_mode ?')
 		self.sendCommand('play_mode ?')
 		self.sendCommand('stop_mode ?')
 
 		self.sendCommand('video_mode ?')
-		self.sendCommand('phases ?')
+		self.sendCommand('fps_mode ?')
+
 		self.sendCommand('fps ?')
 
 		self.checkVariables()
@@ -67,8 +69,8 @@ module.exports = {
 		let self = this
 
 		self.sendCommand('status 0')
-		self.sendCommand('pos ?')
-		self.sendCommand('mark_pos ?')
+		//self.sendCommand('pos ?')
+		//self.sendCommand('mark_pos ?')
 	},
 
 	processData: function (data) {
@@ -78,16 +80,39 @@ module.exports = {
 			self.log('debug', `Received Data: ${data}`)
 		}
 
-		let lines = data.split('\n')
+		let lines = data.toString().split('\r\n').filter(Boolean)
 		//the first line is the command, the rest of the lines are the results of the command
 
 		let command = lines[0]
 		let results = []
 
+		if (command == '') {
+			//get the next index instead
+			command = lines[1]
+		}
+
 		if (lines.length < 2) {
 			results.push(lines[0]) //if there's only one line, it's also the results
 		} else {
 			results = lines
+		}
+
+		console.log('lines', lines)
+		console.log('command', command)
+		console.log('results', results)
+
+		if (lines[0].includes('OK')) {
+			//command ran ok
+		}
+		else if (lines[0].includes('FAIL')) {
+			//error
+			self.log('error', `Error received: ${lines[0]}`)
+			self.log('error', `Command: ${self.lastCommand}`)
+		}
+
+		//if the command is undefined, set it to an empty string
+		if (command == undefined) {
+			command = ''
 		}
 
 		//check to see if the command is one of the following
@@ -99,31 +124,35 @@ module.exports = {
 				self.processVersion(results)
 				break
 			case command.includes('rec_mode'):
-				self.processMode('rec_mode', results)
+				self.processMode('rec_mode', results[0])
 				break
 			case command.includes('play_mode'):
-				self.processMode('play_mode', results)
+				self.processMode('play_mode', results[0])
 				break
 			case command.includes('stop_mode'):
-				self.processMode('stop_mode', results)
+				self.processMode('stop_mode', results[0])
 				break
 			case command.includes('status'):
+			case command.includes('B1: '):
 				self.processStatus(results)
 				break
 			case command.includes('pos'):
-				self.processPosition(results)
+				self.processPosition(results[0])
 				break
 			case command.includes('mark_pos'):
-				self.processMarkPos(results)
+				self.processMarkPos(results[0])
 				break
 			case command.includes('video_mode'):
-				self.processVideoMode(results)
+				self.processVideoMode(results[0])
 				break
-			case command.includes('phases'):
-				self.processPhases(results)
+			case command.includes('fps_mode'):
+				self.processFPSMode(results[0])
 				break
+			//case command.includes('phases'):
+			//	self.processPhases(results)
+			//	break
 			case command.includes('fps'):
-				self.processFPS(results)
+				self.processFPS(results[0])
 				break
 			default:
 				self.log('debug', `Unknown Response: ${command}`)
@@ -181,66 +210,71 @@ module.exports = {
 			//match this regex to get the buffer number and status
 			//[B](.):\s(....)\s\S\s(....)\s(....)
 			//B<buffer_id>: <frames_recorded> / <frames_available> <status>
-			let match = statusArr[i].match(/B(\d): (\d+) \/ (\d+) (\w+)/)
+			//example: B1: 0 / 0 free
 
-			if (match) {
-				let buffer = parseInt(match[1])
-				let recorded = parseInt(match[2])
-				let available = parseInt(match[3])
-				let status = match[4]
+			if (!statusArr[i].includes('OK')) {
+				let match = statusArr[i].match(/B(\d): (\d+) \/ (\d+) (\w+)/)
 
-				switch (status) {
-					case 'free':
-						status = 'Free'
-						break
-					case 'used':
-						status = 'Used'
-						break
-					case 'reco':
-						status = 'Record'
-						self.DATA.currentRecordingBuffer = buffer
-						break
-					case 'play':
-						status = 'Play'
-						self.DATA.currentPlaybackBuffer = buffer
-						break
-					case 'paus':
-						status = 'Pause'
-						self.DATA.currentPlaybackBuffer = buffer
-						break
-				}
+				if (match) {
+					let buffer = parseInt(match[1])
+					let recorded = parseInt(match[2])
+					let available = parseInt(match[3])
+					let status = match[4]
 
-				//if the buffer is a number
-				if (!isNaN(buffer)) {
-					//create an object to store the buffer data
-					let bufferObj = {
-						buffer: buffer,
-						recorded: recorded,
-						available: available,
-						status: status,
-					}
-
-					//make sure the bufferObj is not already in the DATA array
-					let found = false
-					for (let j = 0; j < self.DATA.buffers.length; j++) {
-						if (self.DATA.buffers[j].buffer === buffer) {
-							found = true
-							self.DATA.buffers[j] = bufferObj //update in place
+					switch (status) {
+						case 'free':
+							status = 'Free'
 							break
+						case 'used':
+							status = 'Used'
+							break
+						case 'reco':
+							status = 'Record'
+							self.DATA.currentRecordingBuffer = buffer
+							break
+						case 'play':
+							status = 'Play'
+							self.DATA.currentPlaybackBuffer = buffer
+							break
+						case 'paus':
+							status = 'Pause'
+							self.DATA.currentPlaybackBuffer = buffer
+							break
+					}
+
+					//if the buffer is a number
+					if (!isNaN(buffer)) {
+						//create an object to store the buffer data
+						let bufferObj = {
+							buffer: buffer,
+							recorded: recorded,
+							available: available,
+							status: status,
 						}
-					}
 
-					if (!found) {
-						//add it
-						self.DATA.buffers.push(bufferObj)
-					}
+						//make sure the bufferObj is not already in the DATA array
+						let found = false
+						for (let j = 0; j < self.DATA.buffers.length; j++) {
+							if (self.DATA.buffers[j].buffer === buffer) {
+								found = true
+								self.DATA.buffers[j] = bufferObj //update in place
+								break
+							}
+						}
 
-					self.checkVariables()
+						if (!found) {
+							//add it
+							self.DATA.buffers.push(bufferObj)
+						}
+
+						self.checkFeedbacks()
+						self.checkVariables()
+					} else {
+						self.log('warn', `Invalid buffer status data received here: ${statusArr[i]}`)
+					}
 				} else {
 					self.log('warn', `Invalid buffer status data received: ${statusArr[i]}`)
 				}
-			} else {
-				self.log('warn', `Invalid buffer status data received: ${statusArr[i]}`)
 			}
 		}
 	},
@@ -299,7 +333,7 @@ module.exports = {
 		self.checkVariables()
 	},
 
-	processPhases: function (phases) {
+	/*processPhases: function (phases) {
 		let self = this
 
 		//it comes in a string like this: phases 1
@@ -312,6 +346,23 @@ module.exports = {
 		}
 
 		self.DATA.activePhases = phaseValue
+
+		self.checkVariables()
+	},*/
+
+	processFPSMode: function (fpsMode) {
+		let self = this
+
+		//it comes in a string like this: fps_mode 1
+		//just get the second part
+		let fpsModeArr = fpsMode.split(' ')
+		let mode = 0
+
+		if (fpsModeArr.length === 2) {
+			mode = parseInt(fpsModeArr[1])
+		}
+
+		self.DATA.frameRateMode = mode
 
 		self.checkVariables()
 	},
@@ -535,7 +586,7 @@ module.exports = {
 				self.log('debug', `Sending Command: ${command}`)
 			}
 			try {
-				self.WS.send(command)
+				self.WS.send(command + '\n')
 				self.lastCommand = command
 			} catch (error) {
 				self.log('error', 'Error sending command: ' + String(error))
