@@ -93,11 +93,15 @@ module.exports = {
 	getPollData: function () {
 		let self = this
 
-		self.sendCommand('status 0')
+		self.sendCommand('status 0') //get status of all buffers
 
-		if (self.currentlyPlaying == true) {
-			self.sendCommand('pos')
-			self.sendCommand('mark_pos ?')
+		//check if any of the buffer statuses are Play, and if they are, request pos and mark_pos (we can't request them if nothing is playing)
+		for (let i = 0; i < self.DATA.buffers.length; i++) {
+			if (self.DATA.buffers[i].status === 'Play') {
+				self.sendCommand(`pos`)
+				self.sendCommand(`mark_pos ?`)
+				break
+			}
 		}
 	},
 
@@ -342,7 +346,7 @@ module.exports = {
 							self.DATA.buffers.push(bufferObj)
 						}
 
-						console.log(self.DATA.buffers)
+						//console.log(self.DATA.buffers)
 
 						self.checkFeedbacks()
 						self.checkVariables()
@@ -588,6 +592,7 @@ module.exports = {
 
 		self.DATA.lastRecordingBuffer = self.DATA.currentRecordingBuffer //store the last recording buffer
 		self.DATA.currentRecordingBuffer = buffer //set the current recording buffer
+		self.currentlyRecording = true
 		self.sendCommand(`rec ${buffer}`)
 		self.checkVariables()
 	},
@@ -595,7 +600,13 @@ module.exports = {
 	recordStop: function () {
 		let self = this
 
-		self.sendCommand('rec_stop')
+		if (self.currentlyRecording == true) {
+			self.sendCommand('rec_stop')
+			self.currentlyRecording = false
+		}
+		else {
+			self.log('warn', 'Cannot stop recording when not recording.')
+		}
 	},
 
 	markInFrame: function (pos) {

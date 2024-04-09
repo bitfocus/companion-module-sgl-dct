@@ -67,11 +67,11 @@ module.exports = {
 				if (buffer) {
 					variableValues[`bufferFramesRecorded_${i}`] = buffer.recorded
 					variableValues[`bufferFramesAvailable_${i}`] = buffer.available
-					variableValues[`bufferStatus${i}`] = buffer.status
+					variableValues[`bufferStatus_${i}`] = buffer.status
 				} else {
 					variableValues[`bufferFramesRecorded_${i}`] = 0
 					variableValues[`bufferFramesAvailable_${i}`] = 0
-					variableValues[`bufferStatus${i}`] = 'Unknown'
+					variableValues[`bufferStatus_${i}`] = 'Unknown'
 				}
 			}
 
