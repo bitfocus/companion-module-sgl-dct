@@ -59,7 +59,7 @@ module.exports = {
 		try {
 			let variableValues = {}
 
-			variableValues['version'] = self.DATA.version
+			variableValues['version'] = JSON.stringify(self.DATA.versionObj)
 
 			for (let i = 1; i <= self.config.recordingBuffers; i++) {
 				//loop through self.DATA.buffers and if the buffer number matches the current buffer, set the values

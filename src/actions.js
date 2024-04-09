@@ -379,10 +379,18 @@ module.exports = {
 						required: true,
 						isVisible: (options) => options.nextAvailable === false && options.chooseBufferByVariable === false,
 					},
+					{
+						type: 'checkbox',
+						label: 'Free Buffer if Used (Record will fail if buffer is not free)',
+						id: 'freeBuffer',
+						default: false,
+						isVisible: (options) => options.nextAvailable === false,
+					},
 				],
 				callback: async function (action) {
 					let buffer = parseInt(action.options.buffer)
-					let nextAvailable = parseInt(action.options.nextAvailable)
+					let nextAvailable = action.options.nextAvailable
+					let freeBuffer = action.options.freeBuffer
 
 					if (nextAvailable) {
 						buffer = 0
@@ -390,7 +398,7 @@ module.exports = {
 						buffer = parseInt(await self.parseVariablesInString(action.options.bufferVar))
 					}
 
-					self.record(buffer)
+					self.record(buffer, freeBuffer)
 				},
 			}
 
@@ -564,7 +572,7 @@ module.exports = {
 						id: 'bufferVar',
 						default: '0',
 						useVariables: true,
-						isVisible: (options) => options.chooseBufferByVariable === true,
+						isVisible: (options) => options.freeAll == false && options.chooseBufferByVariable === true,
 					},
 					{
 						type: 'dropdown',

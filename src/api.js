@@ -577,7 +577,7 @@ module.exports = {
 		self.currentlyPlaying = false
 	},
 
-	record: function (buffer = 0) {
+	record: function (buffer = 0, freeBuffer = false) {
 		let self = this
 
 		if (buffer === 0) {
@@ -590,11 +590,28 @@ module.exports = {
 			}
 		}
 
-		self.DATA.lastRecordingBuffer = self.DATA.currentRecordingBuffer //store the last recording buffer
-		self.DATA.currentRecordingBuffer = buffer //set the current recording buffer
-		self.currentlyRecording = true
-		self.sendCommand(`rec ${buffer}`)
-		self.checkVariables()
+		//make sure the requested buffer is free - if not, free it if the freeBuffer flag is set to true
+		for (let i = 0; i < self.DATA.buffers.length; i++) {
+			if (self.DATA.buffers[i].buffer === buffer) {
+				if (self.DATA.buffers[i].status !== 'Free') {
+					if (freeBuffer) {
+						self.freeBuffer(buffer)
+
+						//wait 20ms and then record
+						setTimeout(() => {
+							self.DATA.lastRecordingBuffer = self.DATA.currentRecordingBuffer //store the last recording buffer
+							self.DATA.currentRecordingBuffer = buffer //set the current recording buffer
+							self.currentlyRecording = true
+							self.sendCommand(`rec ${buffer}`)
+							self.checkVariables()
+						}, 20)
+					} else {
+						self.log('warn', `Buffer ${buffer} is not free. Cannot record.`)
+						return
+					}
+				}
+			}
+		}		
 	},
 
 	recordStop: function () {
