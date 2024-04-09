@@ -12,7 +12,7 @@ module.exports = {
 					label: 'Buffer Count',
 					id: 'bufferCount',
 					choices: [
-						{ id: 0, label: '0 (Disables Recording)'},
+						{ id: 0, label: '0 (Disables Recording)' },
 						{ id: 1, label: '1' },
 						{ id: 2, label: '2' },
 						{ id: 3, label: '3' },
@@ -309,9 +309,15 @@ module.exports = {
 
 					let endSpeed = parseInt(await self.parseVariablesInString(action.options.endSpeed))
 
-					let transitionTotalTime = parseInt(await self.parseVariablesInString(action.options.transitionTotalTime))
-					let transitionStepTime = parseInt(await self.parseVariablesInString(action.options.transitionStepTime))
-					let transitionTotalSteps = parseInt(await self.parseVariablesInString(action.options.transitionTotalSteps))
+					let transitionTotalTime = parseInt(
+						await self.parseVariablesInString(action.options.transitionTotalTime),
+					)
+					let transitionStepTime = parseInt(
+						await self.parseVariablesInString(action.options.transitionStepTime),
+					)
+					let transitionTotalSteps = parseInt(
+						await self.parseVariablesInString(action.options.transitionTotalSteps),
+					)
 
 					if (action.options.lastRecorded) {
 						buffer = 0
@@ -321,12 +327,21 @@ module.exports = {
 
 					if (transitionType === 'time') {
 						transitionTotalSteps = ParseInt(Math.ceil(transitionTotalTime / transitionStepTime))
-					}
-					else {
+					} else {
 						transitionStepTime = ParseInt(Math.ceil(transitionTotalTime / transitionTotalSteps))
 					}
 
-					self.rampPlay(buffer, startSpeed, startFrame, rampSpeed, rampFrame, endSpeed, transitionTotalTime, transitionStepTime, transitionTotalSteps)
+					self.rampPlay(
+						buffer,
+						startSpeed,
+						startFrame,
+						rampSpeed,
+						rampFrame,
+						endSpeed,
+						transitionTotalTime,
+						transitionStepTime,
+						transitionTotalSteps,
+					)
 				},
 			}
 
@@ -377,7 +392,8 @@ module.exports = {
 						choices: self.CHOICES_BUFFERS,
 						default: self.CHOICES_BUFFERS[0].id,
 						required: true,
-						isVisible: (options) => options.nextAvailable === false && options.chooseBufferByVariable === false,
+						isVisible: (options) =>
+							options.nextAvailable === false && options.chooseBufferByVariable === false,
 					},
 					{
 						type: 'checkbox',

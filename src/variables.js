@@ -134,8 +134,8 @@ module.exports = {
 			//variableValues['currentSensorFPS'] = self.DATA.sensorFPS
 			//variableValues['currentDisplayFPS'] = self.DATA.displayFPS
 
-			variableValues['lastCommand'] = self.DATA.lastCommand
-			variableValues['lastCommandResponse'] = self.DATA.lastResponse
+			variableValues['lastCommand'] = self.lastCommand
+			variableValues['lastCommandResponse'] = self.lastResponse
 
 			self.setVariableValues(variableValues)
 		} catch (error) {

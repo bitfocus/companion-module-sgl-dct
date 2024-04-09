@@ -33,6 +33,7 @@ class DCTInstance extends InstanceBase {
 
 		this.DATA = {
 			buffers: [],
+			lastRecordingBuffer: 0,
 			currentRecordingBuffer: 0,
 			currentPlaybackBuffer: 0,
 			lastSpeed: 0,

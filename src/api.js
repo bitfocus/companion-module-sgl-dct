@@ -99,7 +99,7 @@ module.exports = {
 		for (let i = 0; i < self.DATA.buffers.length; i++) {
 			if (self.DATA.buffers[i].status === 'Play') {
 				self.sendCommand(`pos`)
-				self.sendCommand(`mark_pos ?`)
+				self.sendCommand(`mark_pos`)
 				break
 			}
 		}
@@ -473,11 +473,24 @@ module.exports = {
 
 		if (buffer === 0) {
 			//determine the last recorded buffer to use
-			buffer = self.DATA.lastRecordingBuffer
+			//but if that is 0, then just choose the first buffer I guess
+			if (self.DATA.lastRecordingBuffer === 0) {
+				buffer = 1
+			}
+			else {
+				buffer = self.DATA.lastRecordingBuffer
+			}
 		}
 
-		self.DATA.currentPlaybackBuffer = buffer
-		self.DATA.lastSpeed = speed
+		//make sure nothing is undefined for any reason
+		if (buffer === undefined) {
+			buffer = 1
+		}
+		
+		if (speed === undefined) {
+			speed = 10
+		}
+
 		if (frame !== undefined) {
 			self.sendCommand(`play ${buffer} ${speed} ${frame}`)
 		} else {
@@ -567,6 +580,8 @@ module.exports = {
 		let self = this
 
 		self.sendCommand('pause')
+
+		self.currentlyPlaying = false //dont think we can call pos or mark_pos when paused
 	},
 
 	stop: function () {
@@ -582,36 +597,46 @@ module.exports = {
 
 		if (buffer === 0) {
 			//if no buffer specified, first determine the first free buffer to record to
+			let found = false
 			for (let i = 0; i < self.DATA.buffers.length; i++) {
 				if (self.DATA.buffers[i].status === 'Free') {
+					self.log('info', `Recording to first free buffer: ${self.DATA.buffers[i].buffer}`)
 					buffer = self.DATA.buffers[i].buffer
+					found = true
 					break
+				}
+			}
+
+			if (!found) {
+				self.log('warn', 'No free buffers available to record to.')
+				return
+			}
+		}
+		else {
+			//make sure the requested buffer is free - if not, free it if the freeBuffer flag is set to true
+			for (let i = 0; i < self.DATA.buffers.length; i++) {
+				if (self.DATA.buffers[i].buffer === buffer) {
+					if (self.DATA.buffers[i].status !== 'Free') {
+						if (freeBuffer) {
+							self.freeBuffer(buffer)						
+						} else {
+							self.log('warn', `Buffer ${buffer} is not free. Cannot record.`)
+							return
+						}
+					}
 				}
 			}
 		}
 
-		//make sure the requested buffer is free - if not, free it if the freeBuffer flag is set to true
-		for (let i = 0; i < self.DATA.buffers.length; i++) {
-			if (self.DATA.buffers[i].buffer === buffer) {
-				if (self.DATA.buffers[i].status !== 'Free') {
-					if (freeBuffer) {
-						self.freeBuffer(buffer)
-
-						//wait 20ms and then record
-						setTimeout(() => {
-							self.DATA.lastRecordingBuffer = self.DATA.currentRecordingBuffer //store the last recording buffer
-							self.DATA.currentRecordingBuffer = buffer //set the current recording buffer
-							self.currentlyRecording = true
-							self.sendCommand(`rec ${buffer}`)
-							self.checkVariables()
-						}, 20)
-					} else {
-						self.log('warn', `Buffer ${buffer} is not free. Cannot record.`)
-						return
-					}
-				}
-			}
-		}		
+		//wait 20ms and then record
+		setTimeout(() => {
+			self.DATA.lastRecordingBuffer = self.DATA.currentRecordingBuffer //store the last recording buffer for... reasons
+			self.DATA.currentRecordingBuffer = buffer //set the current recording buffer
+			self.currentlyRecording = true
+			self.log('info', `Recording to Buffer ${buffer}`)
+			self.sendCommand(`rec ${buffer}`)
+			self.checkVariables()
+		}, 20)
 	},
 
 	recordStop: function () {
@@ -619,11 +644,14 @@ module.exports = {
 
 		if (self.currentlyRecording == true) {
 			self.sendCommand('rec_stop')
-			self.currentlyRecording = false
 		}
 		else {
 			self.log('warn', 'Cannot stop recording when not recording.')
 		}
+
+		self.currentlyRecording = false //set to false after stopping
+		self.DATA.lastRecordingBuffer = self.DATA.currentRecordingBuffer
+		self.DATA.currentRecordingBuffer = 0 //set to 0 after stopping
 	},
 
 	markInFrame: function (pos) {
@@ -667,6 +695,8 @@ module.exports = {
 
 	freeBuffer: function (buffer) {
 		let self = this
+
+		self.log('info', `Freeing Buffer ${buffer}`)
 
 		self.sendCommand(`free ${buffer}`)
 	},
