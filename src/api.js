@@ -21,7 +21,6 @@ module.exports = {
 			self.WS.on('open', () => {
 				console.log('connected')
 				self.updateStatus(InstanceStatus.Ok)
-				self.setBufferCount(self.config.recordingBuffers)
 				self.changeMode('rec_mode', self.config.recordingMode)
 				self.changeMode('play_mode', self.config.playbackMode)
 				self.changeMode('stop_mode', self.config.stopMode)
@@ -41,12 +40,38 @@ module.exports = {
 
 		self.log('info', `Setting Buffer Count to ${count}`)
 
-		self.sendCommand(`count ${count}`)
+		if (count == 0) {
+			self.log('warn', 'Buffer Count set to 0: All buffer related actions will be disabled.')
+		}
+		else {
+			self.log('info', `Setting Buffer Count to ${count}`)
+			self.sendCommand(`count ${count}`)
+		}		
+
+		self.config.recordingBuffers = count
+		self.saveConfig(self.config)
+
+		self.loadBufferCount()
+	},
+
+	loadBufferCount: function () {
+		let self = this
+
+		let count = self.config.recordingBuffers
+
+		if (count == undefined) {
+			count = 4 //set to max
+			self.config.recordingBuffers = count
+		}
 
 		self.CHOICES_BUFFERS = []
 		for (let i = 1; i <= count; i++) {
 			self.CHOICES_BUFFERS.push({ id: i, label: 'Buffer ' + i })
 		}
+
+		self.initActions() //reload actions due to buffer size change
+		self.initVariables() //reload variables due to buffer size change
+		self.checkVariables() //check variables due to buffer size change
 	},
 
 	getData: function () {
@@ -69,94 +94,102 @@ module.exports = {
 		let self = this
 
 		self.sendCommand('status 0')
-		//self.sendCommand('pos ?')
-		//self.sendCommand('mark_pos ?')
+
+		if (self.currentlyPlaying == true) {
+			self.sendCommand('pos')
+			self.sendCommand('mark_pos ?')
+		}
 	},
 
 	processData: function (data) {
 		let self = this
 
-		if (self.config.verbose) {
-			self.log('debug', `Received Data: ${data}`)
-		}
+		try {
+			if (self.config.verbose) {
+				self.log('debug', `Received Data: ${data}`)
+			}
 
-		let lines = data.toString().split('\r\n').filter(Boolean)
-		//the first line is the command, the rest of the lines are the results of the command
+			self.lastResponse = data.toString()
 
-		let command = lines[0]
-		let results = []
+			let lines = data.toString().split('\r\n').filter(Boolean)
+			//the first line is the command, the rest of the lines are the results of the command
 
-		if (command == '') {
-			//get the next index instead
-			command = lines[1]
-		}
+			let command = lines[0]
+			let results = []
 
-		if (lines.length < 2) {
-			results.push(lines[0]) //if there's only one line, it's also the results
-		} else {
-			results = lines
-		}
+			if (command == '') {
+				//get the next index instead
+				command = lines[1]
+			}
 
-		console.log('lines', lines)
-		console.log('command', command)
-		console.log('results', results)
+			if (lines.length < 2) {
+				results.push(lines[0]) //if there's only one line, it's also the results
+			} else {
+				results = lines
+			}
 
-		if (lines[0].includes('OK')) {
-			//command ran ok
-		}
-		else if (lines[0].includes('FAIL')) {
-			//error
-			self.log('error', `Error received: ${lines[0]}`)
-			self.log('error', `Command: ${self.lastCommand}`)
-		}
+			//console.log('lines', lines)
+			//console.log('command', command)
+			//console.log('results', results)
 
-		//if the command is undefined, set it to an empty string
-		if (command == undefined) {
-			command = ''
-		}
+			if (lines[0].includes('OK')) {
+				//command ran ok
+			} else if (lines[0].includes('FAIL')) {
+				//error
+				self.log('error', `Error received: ${lines[0]}`)
+				self.log('error', `Command: ${self.lastCommand}`)
+			}
 
-		//check to see if the command is one of the following
-		switch (true) {
-			case command.includes('OK'):
-				//normal response to command
-				break
-			case command.includes('version'):
-				self.processVersion(results)
-				break
-			case command.includes('rec_mode'):
-				self.processMode('rec_mode', results[0])
-				break
-			case command.includes('play_mode'):
-				self.processMode('play_mode', results[0])
-				break
-			case command.includes('stop_mode'):
-				self.processMode('stop_mode', results[0])
-				break
-			case command.includes('status'):
-			case command.includes('B1: '):
-				self.processStatus(results)
-				break
-			case command.includes('pos'):
-				self.processPosition(results[0])
-				break
-			case command.includes('mark_pos'):
-				self.processMarkPos(results[0])
-				break
-			case command.includes('video_mode'):
-				self.processVideoMode(results[0])
-				break
-			case command.includes('fps_mode'):
-				self.processFPSMode(results[0])
-				break
-			//case command.includes('phases'):
-			//	self.processPhases(results)
-			//	break
-			case command.includes('fps'):
-				self.processFPS(results[0])
-				break
-			default:
-				self.log('debug', `Unknown Response: ${command}`)
-				break
+			//if the command is undefined, set it to an empty string
+			if (command == undefined) {
+				command = '' //prevents errors from using 'includes' on undefined
+			}
+
+			//check to see if the command is one of the following
+			switch (true) {
+				case command.includes('OK'):
+					//normal response to command
+					break
+				case command.includes('version'):
+					self.processVersion(results)
+					break
+				case command.includes('rec_mode'):
+					self.processMode('rec_mode', results[0])
+					break
+				case command.includes('play_mode'):
+					self.processMode('play_mode', results[0])
+					break
+				case command.includes('stop_mode'):
+					self.processMode('stop_mode', results[0])
+					break
+				case command.includes('status'):
+				case command.includes('B1: '): //this is a status update
+					self.processStatus(results)
+					break
+				case command.includes('pos'):
+					self.processPosition(results[0])
+					break
+				case command.includes('mark_pos'):
+					self.processMarkPos(results[0])
+					break
+				case command.includes('video_mode'):
+					self.processVideoMode(results[0])
+					break
+				case command.includes('fps_mode'):
+					self.processFPSMode(results[0])
+					break
+				//case command.includes('phases'):
+				//	self.processPhases(results)
+				//	break
+				case command.includes('fps'):
+					self.processFPS(results[0])
+					break
+				default:
+					self.log('debug', `Unknown Response: ${command}`)
+					break
+			}
+		} catch (error) {
+			self.log('error', `Error processing data: ${error}`)
 		}
 	},
 
@@ -187,17 +220,57 @@ module.exports = {
 		let results = ''
 
 		if (parts.length === 2) {
-			results = parts[1]
+			results = parts[1].toString()
 		}
 
 		switch (modeType) {
 			case 'rec_mode':
+				//make sure the results are one of the valid options in the CHOICES_RECORDING_MODE array
+				let validRecMode = false
+				for (let i = 0; i < self.CHOICES_RECORDING_MODE.length; i++) {
+					if (self.CHOICES_RECORDING_MODE[i].id === results) {
+						validRecMode = true
+						break
+					}
+				}
+
+				if (!validRecMode) {
+					results = self.CHOICES_RECORDING_MODE[0].id //set to the first option
+				}
+
 				self.DATA.recordingMode = results
 				break
 			case 'play_mode':
+				//make sure the results are one of the valid options in the CHOICES_PLAYBACK_MODE array
+				let validPlayMode = false
+
+				for (let i = 0; i < self.CHOICES_PLAYBACK_MODE.length; i++) {
+					if (self.CHOICES_PLAYBACK_MODE[i].id === results) {
+						validPlayMode = true
+						break
+					}
+				}
+
+				if (!validPlayMode) {
+					results = self.CHOICES_PLAYBACK_MODE[0].id //set to the first option
+				}
+
 				self.DATA.playbackMode = results
 				break
 			case 'stop_mode':
+				//make sure the results are one of the valid options in the CHOICES_STOP_MODE array
+				let validStopMode = false
+				for (let i = 0; i < self.CHOICES_STOP_MODE.length; i++) {
+					if (self.CHOICES_STOP_MODE[i].id === results) {
+						validStopMode = true
+						break
+					}
+				}
+
+				if (!validStopMode) {
+					results = self.CHOICES_STOP_MODE[0].id //set to the first option
+				}
+
 				self.DATA.stopMode = results
 				break
 		}
@@ -221,7 +294,7 @@ module.exports = {
 					let available = parseInt(match[3])
 					let status = match[4]
 
-					switch (status) {
+					switch (status.toLowerCase()) {
 						case 'free':
 							status = 'Free'
 							break
@@ -229,6 +302,7 @@ module.exports = {
 							status = 'Used'
 							break
 						case 'reco':
+						case 'record':
 							status = 'Record'
 							self.DATA.currentRecordingBuffer = buffer
 							break
@@ -237,6 +311,7 @@ module.exports = {
 							self.DATA.currentPlaybackBuffer = buffer
 							break
 						case 'paus':
+						case 'pause':
 							status = 'Pause'
 							self.DATA.currentPlaybackBuffer = buffer
 							break
@@ -266,6 +341,8 @@ module.exports = {
 							//add it
 							self.DATA.buffers.push(bufferObj)
 						}
+
+						console.log(self.DATA.buffers)
 
 						self.checkFeedbacks()
 						self.checkVariables()
@@ -397,15 +474,25 @@ module.exports = {
 
 		self.DATA.currentPlaybackBuffer = buffer
 		self.DATA.lastSpeed = speed
-		if (frame) {
+		if (frame !== undefined) {
 			self.sendCommand(`play ${buffer} ${speed} ${frame}`)
 		} else {
 			self.sendCommand(`play ${buffer} ${speed}`)
 		}
+
+		//set the current playback buffer
+		self.DATA.currentPlaybackBuffer = buffer
+
+		//set the last speed
+		self.DATA.lastSpeed = speed
+
+		//set the currentlyPlaying bool to true to indicate that we are currently playing, so we can run pos and mark_pos commands
+		self.currentlyPlaying = true
+
 		self.checkVariables()
 	},
 
-	/*rampPlay: function (buffer, startSpeed, startFrame, rampSpeed, rampFrame, endSpeed, transitionTime) {
+	rampPlay: function (buffer, startSpeed, startFrame, rampSpeed, rampFrame, endSpeed, transitionTotalTime, transitionStepTime, transitionTotalSteps) {
 		let self = this
 
 		if (buffer === 0) {
@@ -416,15 +503,26 @@ module.exports = {
 		self.DATA.currentPlaybackBuffer = buffer
 		self.DATA.lastSpeed = startSpeed
 		self.sendCommand(`play ${buffer} ${startSpeed} ${startFrame}`)
+		self.checkFeedbacks()
 		self.checkVariables()
 
-		//now start an interval to check the current frame position, and when it reaches or passes the rampFrame, change the speed
+		//first check to see if we are currently ramping somewhere
+		if (self.rampingMode) {
+			self.log('warn', 'Ramping already in progress. Cannot start another ramp.')
+			return
+		}
+
+		//now set ramping mode to false
+		self.rampingMode = false
+
+		//now start an interval to check the current frame position, and when it reaches or passes the rampFrame, change the speed and make a note that we are in ramping mode
 		let interval = setInterval(() => {
 			if (self.DATA.pos >= rampFrame) {
+				self.rampingMode = true //set ramping mode to true to indicate in future attempts that we are ramping right now and should not do other ramps
 				self.sendCommand(`speed ${buffer} ${rampSpeed}`)
 				self.DATA.lastSpeed = rampSpeed
-				self.startRamping(buffer, endSpeed, transitionTime)
 				clearInterval(interval)
+				self.startRamping(buffer, rampSpeed, endSpeed, transitionTotalTime)
 			}
 		}, 50) //check every 50ms
 	},
@@ -436,14 +534,18 @@ module.exports = {
 
 		//determine if we're going up or down
 		if (rampSpeed < endSpeed) {
-			speed = rampSpeed
+			speedDir = 'up'
 		} else {
-			speed = endSpeed
+			speedDir = 'down'
 		}
 
-		//calculate the total number of steps that can occur over the transition time
-		let steps = transitionTime / 50
-		let stepSize = Math.abs(rampSpeed - endSpeed) / steps
+		//calculate the total number of steps that can occur over the transition time by first subtracting the larger number from the smaller
+
+		//for example, ramp speed is 50 and end speed is -50, the difference is 100
+		let difference = Math.abs(rampSpeed - endSpeed)
+
+		//now divide the difference by the transition time to get the step size
+		let stepSize = difference / transitionTime
 
 		//start the interval
 		let interval = setInterval(() => {
@@ -455,7 +557,7 @@ module.exports = {
 				clearInterval(interval)
 			}
 		}, 50) //check every 50ms
-	},*/
+	},
 
 	pause: function () {
 		let self = this
@@ -467,6 +569,8 @@ module.exports = {
 		let self = this
 
 		self.sendCommand('stop')
+
+		self.currentlyPlaying = false
 	},
 
 	record: function (buffer = 0) {
@@ -484,7 +588,7 @@ module.exports = {
 
 		self.DATA.lastRecordingBuffer = self.DATA.currentRecordingBuffer //store the last recording buffer
 		self.DATA.currentRecordingBuffer = buffer //set the current recording buffer
-		self.sendCommand(`record ${buffer}`)
+		self.sendCommand(`rec ${buffer}`)
 		self.checkVariables()
 	},
 
@@ -497,13 +601,23 @@ module.exports = {
 	markInFrame: function (pos) {
 		let self = this
 
-		self.sendCommand(`mark_in ${pos}`)
+		if (self.currentlyPlaying == true) {
+			self.sendCommand(`mark_in ${pos}`)	
+		}
+		else {
+			self.log('warn', 'Cannot mark in frame when not playing.')
+		}
 	},
 
 	markOutFrame: function (pos) {
 		let self = this
 
-		self.sendCommand(`mark_out ${pos}`)
+		if (self.currentlyPlaying == true) {
+			self.sendCommand(`mark_out ${pos}`)
+		}
+		else {
+			self.log('warn', 'Cannot mark out frame when not playing.')
+		}
 	},
 
 	changeMode: function (name, mode) {
@@ -515,7 +629,12 @@ module.exports = {
 	seekToFrame: function (mode, pos) {
 		let self = this
 
-		self.sendCommand(`seek ${mode} ${pos} 1`)
+		if (self.currentlyPlaying == true) {
+			self.sendCommand(`seek ${mode} ${pos} 0`)
+		}
+		else {
+			self.log('warn', 'Cannot seek to frame when not playing.')
+		}
 	},
 
 	freeBuffer: function (buffer) {
@@ -588,6 +707,7 @@ module.exports = {
 			try {
 				self.WS.send(command + '\n')
 				self.lastCommand = command
+				self.checkVariables()
 			} catch (error) {
 				self.log('error', 'Error sending command: ' + String(error))
 			}

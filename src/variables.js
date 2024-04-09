@@ -6,10 +6,12 @@ module.exports = {
 
 		variables.push({ variableId: 'version', name: 'Version' })
 
+		variables.push({ variableId: 'bufferCount', name: 'Buffer Count (as configured)' })
+
 		for (let i = 1; i <= 4; i++) {
 			variables.push({ variableId: `bufferFramesRecorded_${i}`, name: `Buffer ${i} Frames Recorded` })
 			variables.push({ variableId: `bufferFramesAvailable_${i}`, name: `Buffer ${i} Frames Available` })
-			variables.push({ variableId: `bufferStatus${i}`, name: `Buffer ${i} Status` })
+			variables.push({ variableId: `bufferStatus_${i}`, name: `Buffer ${i} Status` })
 		}
 
 		variables.push({ variableId: 'currentRecordingBuffer', name: 'Current Recording Buffer' })
@@ -27,6 +29,9 @@ module.exports = {
 		variables.push({ variableId: 'videoMode', name: 'Current Output Video Mode' })
 		variables.push({ variableId: 'frameRate', name: 'Current Frame Rate Mode' })
 
+		variables.push({ variableId: 'lastCommand', name: 'Last Command Sent' })
+		variables.push({ variableId: 'lastCommandResponse', name: 'Last Command Response' })
+
 		//variables.push({ variableId: 'activePhases', name: 'Active Phases' })
 		//variables.push({ variableId: 'currentSensorFPS', name: 'Current Sensor FPS' })
 		//variables.push({ variableId: 'currentDisplayFPS', name: 'Current Output/Display FPS' })
@@ -34,13 +39,16 @@ module.exports = {
 		self.setVariableDefinitions(variables)
 
 		//set the unused text for unused buffer variables
-		let i = 4 - self.config.recordingBuffers
+		let totalBuffersUnused = 4 - self.config.recordingBuffers
 		let unusedBufferText = self.config.unusedBufferText
 		let variableValues = {}
-		for (i; i <= 4; i++) {
+
+		variableValues['bufferCount'] = self.config.recordingBuffers
+
+		for (let i = 4; i > self.config.recordingBuffers; i--) {
 			variableValues[`bufferFramesRecorded_${i}`] = unusedBufferText
 			variableValues[`bufferFramesAvailable_${i}`] = unusedBufferText
-			variableValues[`bufferStatus${i}`] = unusedBufferText
+			variableValues[`bufferStatus_${i}`] = unusedBufferText
 		}
 		self.setVariableValues(variableValues)
 	},
@@ -82,8 +90,7 @@ module.exports = {
 			let recordingMode = self.CHOICES_RECORDING_MODE.find((mode) => mode.id === self.DATA.recordingMode)
 			if (recordingMode) {
 				variableValues['currentRecordingMode'] = recordingMode.label
-			}
-			else {
+			} else {
 				variableValues['currentRecordingMode'] = self.DATA.recordingMode
 			}
 
@@ -91,8 +98,7 @@ module.exports = {
 			let playbackMode = self.CHOICES_PLAYBACK_MODE.find((mode) => mode.id === self.DATA.playbackMode)
 			if (playbackMode) {
 				variableValues['currentPlaybackMode'] = playbackMode.label
-			}
-			else {
+			} else {
 				variableValues['currentPlaybackMode'] = self.DATA.playbackMode
 			}
 
@@ -100,8 +106,7 @@ module.exports = {
 			let stopMode = self.CHOICES_STOP_MODE.find((mode) => mode.id === self.DATA.stopMode)
 			if (stopMode) {
 				variableValues['currentStopMode'] = stopMode.label
-			}
-			else {
+			} else {
 				variableValues['currentStopMode'] = self.DATA.stopMode
 			}
 
@@ -110,7 +115,7 @@ module.exports = {
 			variableValues['currentPlaybackMarkerOut'] = self.DATA.markOut
 
 			//look up the video mode in the CHOICES_VIDEO_MODES array, if it exists, use the label, otherwise use the mode
-			let videoMode = self.CHOICES_VIDEO_MODES.find((mode) => mode.id === self.DATA.videoMode.toString())
+			let videoMode = self.CHOICES_VIDEO_MODES.find((mode) => mode.id === self.DATA.videoMode?.toString())
 			if (videoMode) {
 				variableValues['videoMode'] = videoMode.label
 			} else {
@@ -128,6 +133,9 @@ module.exports = {
 			//variableValues['activePhases'] = self.DATA.activePhases
 			//variableValues['currentSensorFPS'] = self.DATA.sensorFPS
 			//variableValues['currentDisplayFPS'] = self.DATA.displayFPS
+
+			variableValues['lastCommand'] = self.DATA.lastCommand
+			variableValues['lastCommandResponse'] = self.DATA.lastResponse
 
 			self.setVariableValues(variableValues)
 		} catch (error) {

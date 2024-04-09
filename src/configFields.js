@@ -43,26 +43,6 @@ module.exports = {
 				value: '<hr />',
 			},
 			{
-				type: 'dropdown',
-				id: 'recordingBuffers',
-				label: 'Buffers',
-				width: 6,
-				default: 4,
-				choices: [
-					{ id: 1, label: '1' },
-					{ id: 2, label: '2' },
-					{ id: 3, label: '3' },
-					{ id: 4, label: '4' },
-				],
-			},
-			{
-				type: 'static-text',
-				id: 'info',
-				width: 12,
-				label: 'Buffer Count',
-				value: 'Warning: Changing the buffer count will automatically delete all recorded data!',
-			},
-			{
 				type: 'textinput',
 				id: 'unusedBufferText',
 				label: 'Unused Buffer Text',

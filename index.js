@@ -27,6 +27,10 @@ class DCTInstance extends InstanceBase {
 		this.WS = undefined //websocket connection to camera
 		this.INTERVAL = undefined //interval for polling data
 
+		this.RAMPINTERVAL = undefined
+
+		this.currentlyPlaying = false
+
 		this.DATA = {
 			buffers: [],
 			currentRecordingBuffer: 0,
@@ -51,6 +55,8 @@ class DCTInstance extends InstanceBase {
 		}
 
 		this.updateStatus(InstanceStatus.Connecting)
+
+		this.loadBufferCount()
 
 		this.initActions()
 		this.initFeedbacks()
