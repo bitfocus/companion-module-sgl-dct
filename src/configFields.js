@@ -63,12 +63,20 @@ module.exports = {
 				value: '<hr />',
 			},
 			{
+				type: 'checkbox',
+				id: 'setModes',
+				label: 'Set Recording, Playback, and Stop Modes',
+				width: 12,
+				default: false,
+			},
+			{
 				type: 'dropdown',
 				id: 'recordingMode',
 				label: 'Recording Mode',
 				width: 4,
 				default: self.CHOICES_RECORDING_MODE[0].id,
 				choices: self.CHOICES_RECORDING_MODE,
+				isVisible: (config) => config.setModes === true,
 			},
 			{
 				type: 'dropdown',
@@ -77,6 +85,7 @@ module.exports = {
 				width: 4,
 				default: self.CHOICES_PLAYBACK_MODE[0].id,
 				choices: self.CHOICES_PLAYBACK_MODE,
+				isVisible: (config) => config.setModes === true,
 			},
 			{
 				type: 'dropdown',
@@ -85,6 +94,7 @@ module.exports = {
 				width: 4,
 				default: self.CHOICES_STOP_MODE[0].id,
 				choices: self.CHOICES_STOP_MODE,
+				isVisible: (config) => config.setModes === true,
 			},
 			{
 				type: 'static-text',

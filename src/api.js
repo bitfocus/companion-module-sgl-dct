@@ -21,10 +21,14 @@ module.exports = {
 			self.WS.on('open', () => {
 				console.log('connected')
 				self.updateStatus(InstanceStatus.Ok)
-				self.changeMode('rec_mode', self.config.recordingMode)
-				self.changeMode('play_mode', self.config.playbackMode)
-				self.changeMode('stop_mode', self.config.stopMode)
-				self.getData()
+
+				if (self.config.setModes == true) {
+					self.changeMode('rec_mode', self.config.recordingMode)
+					self.changeMode('play_mode', self.config.playbackMode)
+					self.changeMode('stop_mode', self.config.stopMode)
+				}
+
+				self.getData() //initial data request
 				self.getPollData() //call it once to get the data initially
 				self.startInterval()
 			})
@@ -312,12 +316,12 @@ module.exports = {
 							break
 						case 'play':
 							status = 'Play'
-							self.DATA.currentPlaybackBuffer = buffer
+							//self.DATA.currentPlaybackBuffer = buffer
 							break
 						case 'paus':
 						case 'pause':
 							status = 'Pause'
-							self.DATA.currentPlaybackBuffer = buffer
+							//self.DATA.currentPlaybackBuffer = buffer
 							break
 					}
 
@@ -372,7 +376,7 @@ module.exports = {
 			position = parseInt(posArr[1])
 		}
 
-		self.DATA.position = position
+		self.DATA.pos = position
 
 		self.checkVariables()
 	},
