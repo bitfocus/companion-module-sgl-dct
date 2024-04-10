@@ -1,6 +1,6 @@
 # SGL DCT
 
-This module will allow you to control ATOMOne SGL DCT Slow Motion cameras.
+This module will allow you to control SGL DCT Slow Motion cameras.
 
 ## Configuration Options:
 

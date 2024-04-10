@@ -10,7 +10,7 @@ module.exports = {
 				id: 'info',
 				width: 12,
 				label: 'Information',
-				value: `This module controls an ATOMOne SSM (Single Stream Module) from Dream Chip Technologies.`,
+				value: `This module controls an SGL from Dream Chip Technologies.`,
 			},
 			{
 				type: 'static-text',
