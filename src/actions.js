@@ -246,6 +246,23 @@ module.exports = {
 					},
 					{
 						type: 'textinput',
+						label: 'Transition Time (in ms) from Ramp Frame to End Frame',
+						id: 'transitionTotalTime',
+						default: 1500,
+						useVariables: true,
+					},
+					{
+						type: 'dropdown',
+						label: 'Specify Time Between Steps, or Specify Total Steps',
+						id: 'transitionType',
+						default: 'time',
+						choices: [
+							{ id: 'time', label: 'Time Between Steps (Let Companion Calculate Total Steps)' },
+							{ id: 'steps', label: 'Total Steps (Let Companion Calculate Time Between Steps)' },
+						],
+					},
+					{
+						type: 'textinput',
 						label: 'Ramp Speed',
 						id: 'rampSpeed',
 						default: -10,
@@ -266,20 +283,10 @@ module.exports = {
 					},
 					{
 						type: 'textinput',
-						label: 'Transition Time (in ms) from Ramp Speed to End Speed',
-						id: 'transitionTotalTime',
-						default: 1500,
+						label: 'End Frame',
+						id: 'endFrame',
+						default: 0,
 						useVariables: true,
-					},
-					{
-						type: 'dropdown',
-						label: 'Specify Time Between Steps, or Specify Total Steps',
-						id: 'transitionType',
-						default: 'time',
-						choices: [
-							{ id: 'time', label: 'Time Between Steps (Let Companion Calculate Total Steps)' },
-							{ id: 'steps', label: 'Total Steps (Let Companion Calculate Time Between Steps)' },
-						],
 					},
 					{
 						type: 'textinput',
@@ -339,6 +346,7 @@ module.exports = {
 						rampFrame,
 						endSpeed,
 						transitionTotalTime,
+						transitionType,
 						transitionStepTime,
 						transitionTotalSteps,
 					)
@@ -599,6 +607,12 @@ module.exports = {
 						required: true,
 						isVisible: (options) => options.freeAll === false && options.chooseBufferByVariable === false,
 					},
+					{
+						type: 'checkbox',
+						label: 'Start Recording into Buffer automatically',
+						id: 'startRecording',
+						default: false,
+					}
 				],
 				callback: async function (action) {
 					let buffer = 0
@@ -611,7 +625,7 @@ module.exports = {
 						buffer = parseInt(action.options.buffer)
 					}
 
-					self.freeBuffer(buffer)
+					self.freeBuffer(buffer, action.options.startRecording)
 				},
 			}
 		}

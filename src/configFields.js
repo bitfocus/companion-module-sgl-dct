@@ -105,6 +105,20 @@ module.exports = {
 			},
 			{
 				type: 'checkbox',
+				id: 'recordIntoEarliest',
+				label: 'Record into Earliest Free Buffer upon Module Init',
+				width: 12,
+				default: false,
+			},
+			{
+				type: 'static-text',
+				id: 'hr2',
+				width: 12,
+				label: '',
+				value: '<hr />',
+			},
+			{
+				type: 'checkbox',
 				id: 'polling',
 				label: 'Enable Polling',
 				width: 3,

@@ -31,6 +31,13 @@ module.exports = {
 				self.getData() //initial data request
 				self.getPollData() //call it once to get the data initially
 				self.startInterval()
+
+				if (self.config.recordIntoEarliest == true) {
+					//wait 1 second and then start recording into the earliest buffer
+					setTimeout(() => {
+						self.recordIntoEarliest() //start recording into the earliest buffer upon initial connection
+					}, 1000).bind(self)
+				}
 			})
 
 			self.WS.on('message', (data) => {
@@ -174,7 +181,7 @@ module.exports = {
 				case command.includes('B1: '): //this is a status update
 					self.processStatus(results)
 					break
-				case command.includes('pos'):
+				case command.includes('pos') && !command.includes('mark_pos'):
 					self.processPosition(results[0])
 					break
 				case command.includes('mark_pos'):
@@ -340,7 +347,10 @@ module.exports = {
 						for (let j = 0; j < self.DATA.buffers.length; j++) {
 							if (self.DATA.buffers[j].buffer === buffer) {
 								found = true
-								self.DATA.buffers[j] = bufferObj //update in place
+								//update in place
+								self.DATA.buffers[j].recorded = recorded
+								self.DATA.buffers[j].available = available
+								self.DATA.buffers[j].status = status
 								break
 							}
 						}
@@ -376,7 +386,20 @@ module.exports = {
 			position = parseInt(posArr[1])
 		}
 
-		self.DATA.pos = position
+		let buffer = self.DATA.currentPlaybackBuffer
+
+		console.log('*******')
+		console.log('buffer', buffer)
+		console.log('pos', pos)
+		console.log('position', position)
+
+		//find the buffer in the array and store the pos
+		for (let i = 0; i < self.DATA.buffers.length; i++) {
+			if (self.DATA.buffers[i].buffer === buffer) {
+				self.DATA.buffers[i].pos = position
+				break
+			}
+		}
 
 		self.checkVariables()
 	},
@@ -395,8 +418,16 @@ module.exports = {
 			markOut = parseInt(markArr[2])
 		}
 
-		self.DATA.markIn = markIn
-		self.DATA.markOut = markOut
+		let buffer = self.DATA.currentPlaybackBuffer
+
+		//find the buffer in the array and store the pos
+		for (let i = 0; i < self.DATA.buffers.length; i++) {
+			if (self.DATA.buffers[i].buffer === buffer) {
+				self.DATA.buffers[i].markIn = markIn
+				self.DATA.buffers[i].markOut = markOut
+				break
+			}
+		}
 
 		self.checkVariables()
 	},
@@ -504,6 +535,14 @@ module.exports = {
 		//set the current playback buffer
 		self.DATA.currentPlaybackBuffer = buffer
 
+		//find the buffer and set the current speed
+		for (let i = 0; i < self.DATA.buffers.length; i++) {
+			if (self.DATA.buffers[i].buffer === buffer) {
+				self.DATA.buffers[i].speed = speed
+				break
+			}
+		}
+
 		//set the last speed
 		self.DATA.lastSpeed = speed
 
@@ -513,8 +552,27 @@ module.exports = {
 		self.checkVariables()
 	},
 
-	rampPlay: function (buffer, startSpeed, startFrame, rampSpeed, rampFrame, endSpeed, transitionTotalTime, transitionStepTime, transitionTotalSteps) {
+	rampPlay: function (buffer, startSpeed, startFrame, rampSpeed, rampFrame, endSpeed, transitionTotalTime, transitionType, transitionStepTime, transitionTotalSteps) {
 		let self = this
+
+		//first check to see if we are currently ramping somewhere
+		if (self.rampingMode) {
+			self.log('warn', 'Ramping already in progress. Cannot start another ramp.')
+			return
+		}
+
+		//now set ramping mode to false
+		self.rampingMode = false
+		clearInterval(self.RAMPINTERVAL)
+		self.RAMPINTERVAL = undefined
+
+		self.log('info', `Ramping Playback from Buffer ${buffer} at Frame: ${startFrame} Speed: ${startSpeed}, beginning Ramp at Frame: ${rampFrame} with Speed: ${rampSpeed} to end at Frame ${endFrame} Speed: ${endSpeed}.`)
+		if (transitionType == 'time') {
+			self.log('info', `Ramping over ${transitionTotalTime}ms.`)
+		}
+		else if (transitionType == 'steps') {
+			self.log('info', `Ramping ${transitionTotalSteps} steps with a total time of ${transitionTotalTime}ms.`)
+		}
 
 		if (buffer === 0) {
 			//determine the last recorded buffer to use
@@ -527,57 +585,79 @@ module.exports = {
 		self.checkFeedbacks()
 		self.checkVariables()
 
-		//first check to see if we are currently ramping somewhere
-		if (self.rampingMode) {
-			self.log('warn', 'Ramping already in progress. Cannot start another ramp.')
-			return
-		}
-
-		//now set ramping mode to false
-		self.rampingMode = false
+		self.rampingMode = true //set ramping mode to true to indicate in future attempts that we are ramping right now and should not do other ramps
 
 		//now start an interval to check the current frame position, and when it reaches or passes the rampFrame, change the speed and make a note that we are in ramping mode
 		let interval = setInterval(() => {
 			if (self.DATA.pos >= rampFrame) {
-				self.rampingMode = true //set ramping mode to true to indicate in future attempts that we are ramping right now and should not do other ramps
-				self.sendCommand(`speed ${buffer} ${rampSpeed}`)
-				self.DATA.lastSpeed = rampSpeed
 				clearInterval(interval)
-				self.startRamping(buffer, rampSpeed, endSpeed, transitionTotalTime)
+				if (transitionType == 'time') {
+					self.startRampOverTime(buffer, rampSpeed, endSpeed, transitionTotalTime, transitionStepTime)
+				}
+				else if (transitionType == 'steps') {
+					self.startRampOverSteps(buffer, rampSpeed, endSpeed, transitionTotalTime, transitionTotalSteps)
+				}
 			}
-		}, 50) //check every 50ms
+		}, 10) //check every 10ms
 	},
 
-	startRamping: function (buffer, rampSpeed, endSpeed, transitionTime) {
+	startRampOverTime: function (buffer, rampSpeed, rampFrame, endSpeed, endFrame, transitionTotalTime, transitionStepTime) {
 		let self = this
 
-		let speed = 0
+		//perform a ramp with each step taking transitionStepTime over transitionTotalTime, starting at rampFrame and rampSpeed and ending at endFrame and endSpeed
+		let totalSteps = transitionTotalTime / transitionStepTime
+		let currentStep = 0
+		let currentSpeed = rampSpeed
+		let currentFrame = rampFrame
+		let speedStep = (endSpeed - rampSpeed) / totalSteps
+		let frameStep = (endFrame - rampFrame) / totalSteps
 
-		//determine if we're going up or down
-		if (rampSpeed < endSpeed) {
-			speedDir = 'up'
-		} else {
-			speedDir = 'down'
-		}
-
-		//calculate the total number of steps that can occur over the transition time by first subtracting the larger number from the smaller
-
-		//for example, ramp speed is 50 and end speed is -50, the difference is 100
-		let difference = Math.abs(rampSpeed - endSpeed)
-
-		//now divide the difference by the transition time to get the step size
-		let stepSize = difference / transitionTime
-
-		//start the interval
-		let interval = setInterval(() => {
-			if (speed < endSpeed) {
-				speed += stepSize
-				self.sendCommand(`speed ${buffer} ${speed}`)
-				self.DATA.lastSpeed = speed
-			} else {
-				clearInterval(interval)
+		self.RAMPINTERVAL = setInterval(() => {
+			if (currentStep < totalSteps) {
+				currentSpeed += speedStep
+				self.sendCommand(`play ${buffer} ${currentSpeed}`)
+				currentStep++
 			}
-		}, 50) //check every 50ms
+			else {
+				clearInterval(self.RAMPINTERVAL)
+				self.sendCommand(`play ${buffer} ${endSpeed} ${endFrame}`)
+				self.rampingMode = false
+			}
+		}, transitionStepTime)
+	},
+
+	startRampOverSteps: function (buffer, rampSpeed, rampFrame, endSpeed, endFrame, transitionTotalTime, transitionTotalSteps) {
+		let self = this
+
+		//perform a ramp with each step taking transitionStepTime over transitionTotalTime, starting at rampFrame and rampSpeed and ending at endFrame and endSpeed
+		let totalSteps = transitionTotalSteps
+		let currentStep = 0
+		let currentSpeed = rampSpeed
+		let currentFrame = rampFrame
+		let speedStep = (endSpeed - rampSpeed) / totalSteps
+		let frameStep = (endFrame - rampFrame) / totalSteps
+
+		self.RAMPINTERVAL = setInterval(() => {
+			if (currentStep < totalSteps) {
+				currentSpeed += speedStep
+				currentFrame += frameStep
+				self.sendCommand(`play ${buffer} ${currentSpeed} ${currentFrame}`)
+				currentStep++
+			}
+			else {
+				clearInterval(self.RAMPINTERVAL)
+				self.sendCommand(`play ${buffer} ${endSpeed} ${endFrame}`)
+				self.rampingMode = false
+			}
+		}, transitionTotalTime / totalSteps)
+	},
+
+	stopRamp: function () {
+		let self = this
+
+		self.log('info', 'Stopping Ramp.')
+		clearInterval(self.RAMPINTERVAL)
+		self.rampingMode = false
 	},
 
 	pause: function () {
@@ -634,13 +714,39 @@ module.exports = {
 
 		//wait 20ms and then record
 		setTimeout(() => {
+			//first check that we are not recording on another buffer with a higher number
+			if (self.currentlyRecording && self.DATA.currentRecordingBuffer > buffer) {
+				self.log('warn', `Cannot record to Buffer ${buffer} when recording to Buffer ${self.DATA.currentRecordingBuffer} because the current recording buffer is a higher buffer than ${buffer}.`)
+				return
+			}
+
 			self.DATA.lastRecordingBuffer = self.DATA.currentRecordingBuffer //store the last recording buffer for... reasons
 			self.DATA.currentRecordingBuffer = buffer //set the current recording buffer
 			self.currentlyRecording = true
 			self.log('info', `Recording to Buffer ${buffer}`)
 			self.sendCommand(`rec ${buffer}`)
+			self.checkFeedbacks()
 			self.checkVariables()
 		}, 20)
+	},
+
+	recordIntoEarliest: function () {
+		let self = this
+
+		//first determine the first free buffer to record to
+		let found = false
+		for (let i = 0; i < self.DATA.buffers.length; i++) {
+			if (self.DATA.buffers[i].status === 'Free') {
+				self.log('info', `Initialization: Recording to first free buffer: ${self.DATA.buffers[i].buffer}`)
+				self.record(self.DATA.buffers[i].buffer)
+				found = true
+				break
+			}
+		}
+
+		if (!found) {
+			self.log('warn', 'Initialization: No free buffers available to record to.')
+		}
 	},
 
 	recordStop: function () {
@@ -656,6 +762,19 @@ module.exports = {
 		self.currentlyRecording = false //set to false after stopping
 		self.DATA.lastRecordingBuffer = self.DATA.currentRecordingBuffer
 		self.DATA.currentRecordingBuffer = 0 //set to 0 after stopping
+
+		//find the buffer and set the pos and mark pos to 0
+		for (let i = 0; i < self.DATA.buffers.length; i++) {
+			if (self.DATA.buffers[i].buffer === self.DATA.lastRecordingBuffer) {
+				self.DATA.buffers[i].pos = 0
+				self.DATA.buffers[i].markIn = 0
+				self.DATA.buffers[i].markOut = 0
+				break
+			}
+		}
+
+		self.checkFeedbacks()
+		self.checkVariables()
 	},
 
 	markInFrame: function (pos) {
@@ -697,12 +816,56 @@ module.exports = {
 		}
 	},
 
-	freeBuffer: function (buffer) {
+	freeBuffer: function (buffer, startRecording = false) {
 		let self = this
 
 		self.log('info', `Freeing Buffer ${buffer}`)
 
+		if (buffer !== 0) { //if we are not freeing all buffers
+			//first check if we are currently recording to the buffer
+			if (self.currentlyRecording == true && self.DATA.currentRecordingBuffer == buffer) {
+				self.log('warn', `Cannot free Buffer ${buffer} when recording to it.`)
+				return
+			}
+		}
+		else {
+			if (self.currentlyRecording == true) {
+				self.log('warn', `Cannot free all buffers when recording to one of them.`)
+				return
+			}
+		}
+
 		self.sendCommand(`free ${buffer}`)
+
+		//reset buffer pos data
+		for (let i = 0; i < self.DATA.buffers.length; i++) {
+			if (self.DATA.buffers[i].buffer === buffer || buffer == 0) {
+				self.DATA.buffers[i].pos = 0
+				self.DATA.buffers[i].speed = 0
+				self.DATA.buffers[i].markIn = 0
+				self.DATA.buffers[i].markOut = 0
+			}
+		}
+
+		//if we are freeing all buffers, reset the current recording buffer and current playback buffer
+		if (buffer == 0) {
+			self.DATA.currentRecordingBuffer = 0
+			self.DATA.currentPlaybackBuffer = 0
+		}
+
+		self.checkVariables()
+
+		//if startRecording is true, start recording into the buffer after say 20ms
+		//if buffer was 0, then we cleared all buffers, so just record into buffer 1 after 20ms
+		if (buffer == 0) {
+			buffer = 1
+		}
+
+		if (startRecording == true && self.currentlyRecording == false) {
+			setTimeout(() => {
+				self.record(buffer)
+			}, 50) //this delay is directly related to the internal polling rate, if the internal polling rate is too high, this may need to be increased
+		}
 	},
 
 	videoMode: function (mode) {

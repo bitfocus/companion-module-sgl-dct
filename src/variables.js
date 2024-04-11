@@ -12,19 +12,18 @@ module.exports = {
 			variables.push({ variableId: `bufferFramesRecorded_${i}`, name: `Buffer ${i} Frames Recorded` })
 			variables.push({ variableId: `bufferFramesAvailable_${i}`, name: `Buffer ${i} Frames Available` })
 			variables.push({ variableId: `bufferStatus_${i}`, name: `Buffer ${i} Status` })
+			variables.push({ variableId: `bufferPos_${i}`, name: `Buffer ${i} Playback Position` })
+			variables.push({ variableId: `bufferSpeed_${i}`, name: `Buffer ${i} Playback Speed` })
+			variables.push({ variableId: `bufferMarkIn_${i}`, name: `Buffer ${i} Mark In Position` })
+			variables.push({ variableId: `bufferMarkOut_${i}`, name: `Buffer ${i} Mark Out Position` })
 		}
 
 		variables.push({ variableId: 'currentRecordingBuffer', name: 'Current Recording Buffer' })
 		variables.push({ variableId: 'currentPlaybackBuffer', name: 'Current Playback Buffer' })
-		variables.push({ variableId: 'lastPlaybackSpeed', name: 'Last Playback Speed' })
 
 		variables.push({ variableId: 'currentRecordingMode', name: 'Current Recording Mode' })
 		variables.push({ variableId: 'currentPlaybackMode', name: 'Current Playback Mode' })
 		variables.push({ variableId: 'currentStopMode', name: 'Current Stop Mode' })
-
-		variables.push({ variableId: 'currentFramePosition', name: 'Current Frame Position of Playback Buffer' })
-		variables.push({ variableId: 'currentPlaybackMarkerIn', name: 'Current Playback Marker In' })
-		variables.push({ variableId: 'currentPlaybackMarkerOut', name: 'Current Playback Marker Out' })
 
 		variables.push({ variableId: 'videoMode', name: 'Current Output Video Mode' })
 		variables.push({ variableId: 'frameRate', name: 'Current Frame Rate Mode' })
@@ -39,7 +38,6 @@ module.exports = {
 		self.setVariableDefinitions(variables)
 
 		//set the unused text for unused buffer variables
-		let totalBuffersUnused = 4 - self.config.recordingBuffers
 		let unusedBufferText = self.config.unusedBufferText
 		let variableValues = {}
 
@@ -68,10 +66,10 @@ module.exports = {
 					variableValues[`bufferFramesRecorded_${i}`] = buffer.recorded
 					variableValues[`bufferFramesAvailable_${i}`] = buffer.available
 					variableValues[`bufferStatus_${i}`] = buffer.status
-				} else {
-					variableValues[`bufferFramesRecorded_${i}`] = 0
-					variableValues[`bufferFramesAvailable_${i}`] = 0
-					variableValues[`bufferStatus_${i}`] = 'Unknown'
+					variableValues[`bufferPos_${i}`] = buffer.pos
+					variableValues[`bufferSpeed_${i}`] = buffer.speed
+					variableValues[`bufferMarkIn_${i}`] = buffer.markIn
+					variableValues[`bufferMarkOut_${i}`] = buffer.markOut
 				}
 			}
 
@@ -109,10 +107,6 @@ module.exports = {
 			} else {
 				variableValues['currentStopMode'] = self.DATA.stopMode
 			}
-
-			variableValues['currentFramePosition'] = self.DATA.pos
-			variableValues['currentPlaybackMarkerIn'] = self.DATA.markIn
-			variableValues['currentPlaybackMarkerOut'] = self.DATA.markOut
 
 			//look up the video mode in the CHOICES_VIDEO_MODES array, if it exists, use the label, otherwise use the mode
 			let videoMode = self.CHOICES_VIDEO_MODES.find((mode) => mode.id === self.DATA.videoMode?.toString())
