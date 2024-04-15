@@ -124,7 +124,7 @@ module.exports = {
 				],
 				callback: async function (action) {
 					let buffer = parseInt(action.options.buffer)
-					let speed = action.options.speed
+					let speed = parseInt(action.options.speed)
 					let frame = parseInt(await self.parseVariablesInString(action.options.frame))
 
 					if (action.options.lastRecorded) {
@@ -558,12 +558,10 @@ module.exports = {
 						required: true,
 					},
 					{
-						type: 'number',
+						type: 'textinput',
 						label: 'Position/Frames to Seek',
 						id: 'position',
-						default: 0,
-						min: -300000,
-						max: 300000,
+						default: '0',
 						useVariables: true,
 					},
 				],
@@ -647,6 +645,24 @@ module.exports = {
 			},
 		}
 
+		actions.setFrameRateMode = {
+			name: 'Set Frame Rate Mode',
+			options: [
+				{
+					type: 'dropdown',
+					label: 'Frame Rate',
+					id: 'frameRateMode',
+					choices: self.CHOICES_FRAME_RATE_MODES,
+					default: self.CHOICES_FRAME_RATE_MODES[0].id
+				},
+			],
+			callback: async function (action) {
+				let frameRateMode = action.options.frameRateMode
+
+				self.frameRateMode(frameRateMode)
+			},
+		}
+
 		/*actions.phases = {
 			name: 'Set Active Phases and Frame Rate',
 			options: [
@@ -691,7 +707,7 @@ module.exports = {
 			},
 		}*/
 
-		actions.setFrameRate = {
+		/*actions.setFrameRate = {
 			name: 'Set Frame Rate (FPS)',
 			options: [
 				{
@@ -728,7 +744,7 @@ module.exports = {
 
 				self.frameRate(frameRate)
 			},
-		}
+		}*/
 
 		actions.changeNetworkSettings = {
 			name: 'Change Networking Settings',

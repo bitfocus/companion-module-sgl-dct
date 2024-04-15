@@ -88,15 +88,15 @@ module.exports = {
 	getData: function () {
 		let self = this
 
-		//self.sendCommand('version')
+		self.sendCommand('version')
 		self.sendCommand('rec_mode ?')
 		self.sendCommand('play_mode ?')
 		self.sendCommand('stop_mode ?')
 
 		self.sendCommand('video_mode ?')
-		self.sendCommand('fps_mode ?')
+		//self.sendCommand('fps_mode ?')
 
-		self.sendCommand('fps ?')
+		//self.sendCommand('fps ?')
 
 		self.checkVariables()
 	},
@@ -105,6 +105,8 @@ module.exports = {
 		let self = this
 
 		self.sendCommand('status 0') //get status of all buffers
+
+		self.sendCommand('fps_mode ?')
 
 		//check if any of the buffer statuses are Play, and if they are, request pos and mark_pos (we can't request them if nothing is playing)
 		for (let i = 0; i < self.DATA.buffers.length; i++) {
@@ -124,7 +126,13 @@ module.exports = {
 				self.log('debug', `Received Data: ${data}`)
 			}
 
-			self.lastResponse = data.toString()
+			self.lastResponse = data.toString().trim()
+
+			if (data.toString().includes('platform')) {
+				//this is a version response
+				self.processVersion(data.toString())
+				return
+			}
 
 			let lines = data.toString().split('\r\n').filter(Boolean)
 			//the first line is the command, the rest of the lines are the results of the command
@@ -151,8 +159,8 @@ module.exports = {
 				//command ran ok
 			} else if (lines[0].includes('FAIL')) {
 				//error
-				self.log('error', `Error received: ${lines[0]}`)
-				self.log('error', `Command: ${self.lastCommand}`)
+				self.log('warn', `Error received: ${lines[0]}`)
+				self.log('warn', `Command: ${self.lastCommand}`)
 			}
 
 			//if the command is undefined, set it to an empty string
@@ -165,8 +173,8 @@ module.exports = {
 				case command.includes('OK'):
 					//normal response to command
 					break
-				case command.includes('version'):
-					self.processVersion(results)
+				case command.includes('FAIL'):
+					//already processed fail
 					break
 				case command.includes('rec_mode'):
 					self.processMode('rec_mode', results[0])
@@ -196,7 +204,7 @@ module.exports = {
 				//case command.includes('phases'):
 				//	self.processPhases(results)
 				//	break
-				case command.includes('fps'):
+				case command.includes('fps') && !command.includes('fps_mode'):
 					self.processFPS(results[0])
 					break
 				default:
@@ -213,11 +221,13 @@ module.exports = {
 
 		let versionObj = {}
 
+		versionArr = versionArr.split('\r\n').filter(Boolean)
+
 		for (let i = 0; i < versionArr.length; i++) {
 			let match = versionArr[i].match(/(.*): (.*)/)
 
 			if (match) {
-				let key = match[1].replace('-', '').replace(' ', '')
+				let key = match[1].replace('-', '').replace(' ', '').trim().toLowerCase()
 				let value = match[2]
 
 				versionObj[key] = value
@@ -387,11 +397,6 @@ module.exports = {
 		}
 
 		let buffer = self.DATA.currentPlaybackBuffer
-
-		console.log('*******')
-		console.log('buffer', buffer)
-		console.log('pos', pos)
-		console.log('position', position)
 
 		//find the buffer in the array and store the pos
 		for (let i = 0; i < self.DATA.buffers.length; i++) {
@@ -773,6 +778,13 @@ module.exports = {
 			}
 		}
 
+		//if we are not playing anywhere else, automatically play this last recorded buffer at speed 0, after, say, 20ms
+		if (self.currentlyPlaying == false) {
+			setTimeout(() => {
+				self.play(self.DATA.lastRecordingBuffer, 0)
+			}, 20)
+		}
+
 		self.checkFeedbacks()
 		self.checkVariables()
 	},
@@ -851,6 +863,8 @@ module.exports = {
 		if (buffer == 0) {
 			self.DATA.currentRecordingBuffer = 0
 			self.DATA.currentPlaybackBuffer = 0
+			self.DATA.currentlyRecording = false
+			self.DATA.currentlyPlaying = false
 		}
 
 		self.checkVariables()
@@ -872,6 +886,12 @@ module.exports = {
 		let self = this
 
 		self.sendCommand(`video_mode ${mode}`)
+	},
+
+	frameRateMode: function (mode) {
+		let self = this
+
+		self.sendCommand(`fps_mode ${mode}`)
 	},
 
 	phases: function (phases) {

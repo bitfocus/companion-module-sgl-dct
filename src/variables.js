@@ -4,18 +4,23 @@ module.exports = {
 
 		let variables = []
 
-		variables.push({ variableId: 'version', name: 'Version' })
+		//variables.push({ variableId: 'version', name: 'Version' })
 
 		variables.push({ variableId: 'bufferCount', name: 'Buffer Count (as configured)' })
 
 		for (let i = 1; i <= 4; i++) {
 			variables.push({ variableId: `bufferFramesRecorded_${i}`, name: `Buffer ${i} Frames Recorded` })
+			variables.push({ variableId: `bufferSecondsRecorded_${i}`, name: `Buffer ${i} Seconds Recorded` })
 			variables.push({ variableId: `bufferFramesAvailable_${i}`, name: `Buffer ${i} Frames Available` })
+			variables.push({ variableId: `bufferSecondsAvailable_${i}`, name: `Buffer ${i} Seconds Available` })
 			variables.push({ variableId: `bufferStatus_${i}`, name: `Buffer ${i} Status` })
 			variables.push({ variableId: `bufferPos_${i}`, name: `Buffer ${i} Playback Position` })
+			variables.push({ variableId: `bufferPosSeconds_${i}`, name: `Buffer ${i} Playback Position Seconds` })
 			variables.push({ variableId: `bufferSpeed_${i}`, name: `Buffer ${i} Playback Speed` })
 			variables.push({ variableId: `bufferMarkIn_${i}`, name: `Buffer ${i} Mark In Position` })
+			variables.push({ variableId: `bufferMarkInSeconds_${i}`, name: `Buffer ${i} Mark In Position Seconds` })
 			variables.push({ variableId: `bufferMarkOut_${i}`, name: `Buffer ${i} Mark Out Position` })
+			variables.push({ variableId: `bufferMarkOutSeconds_${i}`, name: `Buffer ${i} Mark Out Position Seconds` })
 		}
 
 		variables.push({ variableId: 'currentRecordingBuffer', name: 'Current Recording Buffer' })
@@ -57,19 +62,60 @@ module.exports = {
 		try {
 			let variableValues = {}
 
-			variableValues['version'] = JSON.stringify(self.DATA.versionObj)
+			//variableValues['version'] = JSON.stringify(self.DATA.version)
+
+			let frameRate = 1
+
+			//look up the frame rate in the CHOICES_FRAME_RATES array, if it exists, use the frame rate, otherwise use the mode
+			let frameRateMode = self.CHOICES_FRAME_RATE_MODES.find((rate) => rate.id.toString() === self.DATA.frameRateMode?.toString())
+			if (frameRateMode) {
+				variableValues['frameRate'] = frameRateMode.label
+				frameRate = parseInt(frameRateMode.label)
+			} else {
+				variableValues['frameRate'] = 'Mode ' + self.DATA.frameRateMode
+				frameRate = parseInt(self.DATA.frameRateMode)
+			}
 
 			for (let i = 1; i <= self.config.recordingBuffers; i++) {
 				//loop through self.DATA.buffers and if the buffer number matches the current buffer, set the values
 				let buffer = self.DATA.buffers.find((buffer) => buffer.buffer === i)
 				if (buffer) {
 					variableValues[`bufferFramesRecorded_${i}`] = buffer.recorded
+					//calculate seconds recorded based on the amount recorded, the frame rate and speed
+					let secondsRecorded = Number.parseFloat((buffer.recorded / frameRate)/buffer.speed).toFixed(2);
+
+
+
+					if (isNaN(secondsRecorded)) {
+						secondsRecorded = 0
+					}
+					variableValues[`bufferSecondsRecorded_${i}`] = secondsRecorded
 					variableValues[`bufferFramesAvailable_${i}`] = buffer.available
+					let secondsAvailable = Number.parseFloat((buffer.available / frameRate)/buffer.speed).toFixed(2);
+					if (isNaN(secondsAvailable)) {
+						secondsAvailable = 0
+					}
+					variableValues[`bufferSecondsAvailable_${i}`] = secondsAvailable
 					variableValues[`bufferStatus_${i}`] = buffer.status
 					variableValues[`bufferPos_${i}`] = buffer.pos
+					let secondsPos = Number.parseFloat((buffer.pos / frameRate)/buffer.speed).toFixed(2);
+					if (isNaN(secondsPos)) {
+						secondsPos = 0
+					}
+					variableValues[`bufferPosSeconds_${i}`] = secondsPos
 					variableValues[`bufferSpeed_${i}`] = buffer.speed
 					variableValues[`bufferMarkIn_${i}`] = buffer.markIn
+					let secondsMarkIn = Number.parseFloat((buffer.markIn / frameRate)/buffer.speed).toFixed(2);
+					if (isNaN(secondsMarkIn)) {
+						secondsMarkIn = 0
+					}
+					variableValues[`bufferMarkInSeconds_${i}`] = secondsMarkIn
 					variableValues[`bufferMarkOut_${i}`] = buffer.markOut
+					let secondsMarkOut = Number.parseFloat((buffer.markOut / frameRate)/buffer.speed).toFixed(2);
+					if (isNaN(secondsMarkOut)) {
+						secondsMarkOut = 0
+					}
+					variableValues[`bufferMarkOutSeconds_${i}`] = secondsMarkOut
 				}
 			}
 
@@ -114,14 +160,6 @@ module.exports = {
 				variableValues['videoMode'] = videoMode.label
 			} else {
 				variableValues['videoMode'] = self.DATA.videoMode
-			}
-
-			//look up the frame rate in the CHOICES_FRAME_RATES array, if it exists, use the frame rate, otherwise use the mode
-			let frameRate = self.CHOICES_FRAME_RATES.find((rate) => rate.id === self.DATA.frameRate)
-			if (frameRate) {
-				variableValues['frameRate'] = frameRate.frameRate
-			} else {
-				variableValues['frameRate'] = self.DATA.frameRate
 			}
 
 			//variableValues['activePhases'] = self.DATA.activePhases

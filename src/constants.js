@@ -64,7 +64,7 @@ module.exports = {
 		{ id: '14', label: '1080p59.94', frameRate: 59.94 },
 	],
 
-	CHOICES_FRAME_RATES: [
+	CHOICES_FRAME_RATE_MODES: [
 		{ id: 0, label: '24' },
 		{ id: 1, label: '25' },
 		{ id: 2, label: '30' },
