@@ -6,6 +6,9 @@ module.exports = {
 	initConnection: function () {
 		let self = this
 
+		//clear the reconnect interval
+		clearTimeout(self.RECONNECT_INTERVAL)
+
 		if (self.WS) {
 			self.stopInterval() //stop any existing intervals
 			self.closeConnection() //close any existing connections
@@ -16,6 +19,15 @@ module.exports = {
 
 			self.WS.on('error', (error) => {
 				console.log(error)
+
+				//stop polling
+				self.stopInterval()
+
+				//try to reconnect after 10 seconds
+				self.log('warn', 'Connection Error. Attempting to reconnect in 10 seconds.')
+				self.RECONNECT_INTERVAL = setTimeout(() => {
+					self.initConnection()
+				}, 10000)
 			})
 
 			self.WS.on('open', () => {
@@ -75,14 +87,23 @@ module.exports = {
 			self.config.recordingBuffers = count
 		}
 
+		//check the size of the buffers array and if it's more than the new count, delete the additional entries
+		if (self.DATA.buffers.length > count) {
+			self.DATA.buffers.splice(count, self.DATA.buffers.length - count)
+		}
+
 		self.CHOICES_BUFFERS = []
 		for (let i = 1; i <= count; i++) {
 			self.CHOICES_BUFFERS.push({ id: i, label: 'Buffer ' + i })
 		}
 
 		self.initActions() //reload actions due to buffer size change
+		self.initFeedbacks() //reload feedbacks due to buffer size change
 		self.initVariables() //reload variables due to buffer size change
+
+		self.checkFeedbacks() //check feedbacks due to buffer size change
 		self.checkVariables() //check variables due to buffer size change
+
 	},
 
 	getData: function () {

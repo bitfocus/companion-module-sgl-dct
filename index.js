@@ -27,6 +27,8 @@ class DCTInstance extends InstanceBase {
 		this.WS = undefined //websocket connection to camera
 		this.INTERVAL = undefined //interval for polling data
 
+		this.RECONNECT_INTERVAL = undefined
+
 		this.RAMPINTERVAL = undefined
 
 		this.currentlyPlaying = false
