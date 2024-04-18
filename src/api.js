@@ -65,11 +65,10 @@ module.exports = {
 
 		if (count == 0) {
 			self.log('warn', 'Buffer Count set to 0: All buffer related actions will be disabled.')
-		}
-		else {
+		} else {
 			self.log('info', `Setting Buffer Count to ${count}`)
 			self.sendCommand(`count ${count}`)
-		}		
+		}
 
 		self.config.recordingBuffers = count
 		self.saveConfig(self.config)
@@ -87,15 +86,46 @@ module.exports = {
 			self.config.recordingBuffers = count
 		}
 
-		//check the size of the buffers array and if it's more than the new count, delete the additional entries
+		//reset the buffers array
+		self.DATA.buffers = []
+
+		//create the buffers array
+		for (let i = 1; i <= 4; i++) {
+			self.DATA.buffers.push({
+				buffer: i,
+				recorded: 0,
+				available: 0,
+				status: 'Free',
+				pos: 0,
+				speed: 0,
+				markIn: 0,
+				markOut: 0,
+			})
+		}
+
+		//check the size of the buffers array and if it's more than the new count, set the additional ones to have a buffer status of offline
 		if (self.DATA.buffers.length > count) {
-			self.DATA.buffers.splice(count, self.DATA.buffers.length - count)
+			for (let i = count; i < self.DATA.buffers.length; i++) {
+				self.DATA.buffers[i].status = 'offline'
+			}
 		}
 
 		self.CHOICES_BUFFERS = []
 		for (let i = 1; i <= count; i++) {
 			self.CHOICES_BUFFERS.push({ id: i, label: 'Buffer ' + i })
 		}
+
+		//now add the remaining buffers to the choices list but add (offline) to the end
+		for (let i = count + 1; i <= 4; i++) {
+			self.CHOICES_BUFFERS.push({ id: i, label: 'Buffer ' + i + ' (offline)' })
+		}
+
+		//reset currentlyRecording and currentlyPlaying variables
+		self.DATA.currentlyRecording = false
+		self.DATA.currentlyPlaying = false
+		self.DATA.lastRecordingBuffer = 0
+		self.DATA.currentRecordingBuffer = 0
+		self.DATA.currentPlaybackBuffer = 0
 
 		self.initActions() //reload actions due to buffer size change
 		self.initFeedbacks() //reload feedbacks due to buffer size change
@@ -104,6 +134,7 @@ module.exports = {
 		self.checkFeedbacks() //check feedbacks due to buffer size change
 		self.checkVariables() //check variables due to buffer size change
 
+		self.record(0, false) //record into the first free buffer
 	},
 
 	getData: function () {
@@ -131,7 +162,7 @@ module.exports = {
 
 		//check if any of the buffer statuses are Play, and if they are, request pos and mark_pos (we can't request them if nothing is playing)
 		for (let i = 0; i < self.DATA.buffers.length; i++) {
-			if (self.DATA.buffers[i].status === 'Play') {
+			if (self.DATA.buffers[i].status.toLowerCase() === 'play') {
 				self.sendCommand(`pos`)
 				self.sendCommand(`mark_pos`)
 				break
@@ -537,8 +568,7 @@ module.exports = {
 			//but if that is 0, then just choose the first buffer I guess
 			if (self.DATA.lastRecordingBuffer === 0) {
 				buffer = 1
-			}
-			else {
+			} else {
 				buffer = self.DATA.lastRecordingBuffer
 			}
 		}
@@ -547,7 +577,7 @@ module.exports = {
 		if (buffer === undefined) {
 			buffer = 1
 		}
-		
+
 		if (speed === undefined) {
 			speed = 10
 		}
@@ -573,12 +603,23 @@ module.exports = {
 		self.DATA.lastSpeed = speed
 
 		//set the currentlyPlaying bool to true to indicate that we are currently playing, so we can run pos and mark_pos commands
-		self.currentlyPlaying = true
+		self.DATA.currentlyPlaying = true
 
 		self.checkVariables()
 	},
 
-	rampPlay: function (buffer, startSpeed, startFrame, rampSpeed, rampFrame, endSpeed, transitionTotalTime, transitionType, transitionStepTime, transitionTotalSteps) {
+	rampPlay: function (
+		buffer,
+		startSpeed,
+		startFrame,
+		rampSpeed,
+		rampFrame,
+		endSpeed,
+		transitionTotalTime,
+		transitionType,
+		transitionStepTime,
+		transitionTotalSteps,
+	) {
 		let self = this
 
 		//first check to see if we are currently ramping somewhere
@@ -592,11 +633,13 @@ module.exports = {
 		clearInterval(self.RAMPINTERVAL)
 		self.RAMPINTERVAL = undefined
 
-		self.log('info', `Ramping Playback from Buffer ${buffer} at Frame: ${startFrame} Speed: ${startSpeed}, beginning Ramp at Frame: ${rampFrame} with Speed: ${rampSpeed} to end at Frame ${endFrame} Speed: ${endSpeed}.`)
+		self.log(
+			'info',
+			`Ramping Playback from Buffer ${buffer} at Frame: ${startFrame} Speed: ${startSpeed}, beginning Ramp at Frame: ${rampFrame} with Speed: ${rampSpeed} to end at Frame ${endFrame} Speed: ${endSpeed}.`,
+		)
 		if (transitionType == 'time') {
 			self.log('info', `Ramping over ${transitionTotalTime}ms.`)
-		}
-		else if (transitionType == 'steps') {
+		} else if (transitionType == 'steps') {
 			self.log('info', `Ramping ${transitionTotalSteps} steps with a total time of ${transitionTotalTime}ms.`)
 		}
 
@@ -619,15 +662,22 @@ module.exports = {
 				clearInterval(interval)
 				if (transitionType == 'time') {
 					self.startRampOverTime(buffer, rampSpeed, endSpeed, transitionTotalTime, transitionStepTime)
-				}
-				else if (transitionType == 'steps') {
+				} else if (transitionType == 'steps') {
 					self.startRampOverSteps(buffer, rampSpeed, endSpeed, transitionTotalTime, transitionTotalSteps)
 				}
 			}
 		}, 10) //check every 10ms
 	},
 
-	startRampOverTime: function (buffer, rampSpeed, rampFrame, endSpeed, endFrame, transitionTotalTime, transitionStepTime) {
+	startRampOverTime: function (
+		buffer,
+		rampSpeed,
+		rampFrame,
+		endSpeed,
+		endFrame,
+		transitionTotalTime,
+		transitionStepTime,
+	) {
 		let self = this
 
 		//perform a ramp with each step taking transitionStepTime over transitionTotalTime, starting at rampFrame and rampSpeed and ending at endFrame and endSpeed
@@ -643,8 +693,7 @@ module.exports = {
 				currentSpeed += speedStep
 				self.sendCommand(`play ${buffer} ${currentSpeed}`)
 				currentStep++
-			}
-			else {
+			} else {
 				clearInterval(self.RAMPINTERVAL)
 				self.sendCommand(`play ${buffer} ${endSpeed} ${endFrame}`)
 				self.rampingMode = false
@@ -652,7 +701,15 @@ module.exports = {
 		}, transitionStepTime)
 	},
 
-	startRampOverSteps: function (buffer, rampSpeed, rampFrame, endSpeed, endFrame, transitionTotalTime, transitionTotalSteps) {
+	startRampOverSteps: function (
+		buffer,
+		rampSpeed,
+		rampFrame,
+		endSpeed,
+		endFrame,
+		transitionTotalTime,
+		transitionTotalSteps,
+	) {
 		let self = this
 
 		//perform a ramp with each step taking transitionStepTime over transitionTotalTime, starting at rampFrame and rampSpeed and ending at endFrame and endSpeed
@@ -669,8 +726,7 @@ module.exports = {
 				currentFrame += frameStep
 				self.sendCommand(`play ${buffer} ${currentSpeed} ${currentFrame}`)
 				currentStep++
-			}
-			else {
+			} else {
 				clearInterval(self.RAMPINTERVAL)
 				self.sendCommand(`play ${buffer} ${endSpeed} ${endFrame}`)
 				self.rampingMode = false
@@ -691,15 +747,17 @@ module.exports = {
 
 		self.sendCommand('pause')
 
-		self.currentlyPlaying = false //dont think we can call pos or mark_pos when paused
+		self.DATA.currentlyPlaying = false //dont think we can call pos or mark_pos when paused
 	},
 
 	stop: function () {
 		let self = this
 
+		self.log('info', `Stopping Playback. Buffer: ${self.DATA.currentPlaybackBuffer}`)
+
 		self.sendCommand('stop')
 
-		self.currentlyPlaying = false
+		self.DATA.currentlyPlaying = false
 	},
 
 	record: function (buffer = 0, freeBuffer = false) {
@@ -709,7 +767,7 @@ module.exports = {
 			//if no buffer specified, first determine the first free buffer to record to
 			let found = false
 			for (let i = 0; i < self.DATA.buffers.length; i++) {
-				if (self.DATA.buffers[i].status === 'Free') {
+				if (self.DATA.buffers[i].status.toLowerCase() === 'free') {
 					self.log('info', `Recording to first free buffer: ${self.DATA.buffers[i].buffer}`)
 					buffer = self.DATA.buffers[i].buffer
 					found = true
@@ -721,14 +779,13 @@ module.exports = {
 				self.log('warn', 'No free buffers available to record to.')
 				return
 			}
-		}
-		else {
+		} else {
 			//make sure the requested buffer is free - if not, free it if the freeBuffer flag is set to true
 			for (let i = 0; i < self.DATA.buffers.length; i++) {
 				if (self.DATA.buffers[i].buffer === buffer) {
-					if (self.DATA.buffers[i].status !== 'Free') {
-						if (freeBuffer) {
-							self.freeBuffer(buffer)						
+					if (self.DATA.buffers[i].status.toLowerCase() !== 'free') {
+						if (freeBuffer == true) {
+							self.freeBuffer(buffer)
 						} else {
 							self.log('warn', `Buffer ${buffer} is not free. Cannot record.`)
 							return
@@ -738,17 +795,28 @@ module.exports = {
 			}
 		}
 
+		//make sure buffer is not 0 before continuing
+		if (buffer === 0) {
+			self.log('warn', 'Cannot record to buffer 0. An error occured - this should not have happened.')
+			return
+		}
+
 		//wait 20ms and then record
 		setTimeout(() => {
 			//first check that we are not recording on another buffer with a higher number
-			if (self.currentlyRecording && self.DATA.currentRecordingBuffer > buffer) {
-				self.log('warn', `Cannot record to Buffer ${buffer} when recording to Buffer ${self.DATA.currentRecordingBuffer} because the current recording buffer is a higher buffer than ${buffer}.`)
-				return
+			if (self.DATA.currentlyRecording && self.DATA.currentRecordingBuffer > buffer) {
+				if (self.config.forceSequentialRecording == true) {
+					self.log(
+						'warn',
+						`Cannot record to Buffer ${buffer} when recording to Buffer ${self.DATA.currentRecordingBuffer} because the current recording buffer is a higher buffer than ${buffer}.`,
+					)
+					return
+				}
 			}
 
 			self.DATA.lastRecordingBuffer = self.DATA.currentRecordingBuffer //store the last recording buffer for... reasons
-			self.DATA.currentRecordingBuffer = buffer //set the current recording buffer
-			self.currentlyRecording = true
+			self.DATA.currentRecordingBuffer = buffer //set the new current recording buffer
+			self.DATA.currentlyRecording = true
 			self.log('info', `Recording to Buffer ${buffer}`)
 			self.sendCommand(`rec ${buffer}`)
 			self.checkFeedbacks()
@@ -762,7 +830,7 @@ module.exports = {
 		//first determine the first free buffer to record to
 		let found = false
 		for (let i = 0; i < self.DATA.buffers.length; i++) {
-			if (self.DATA.buffers[i].status === 'Free') {
+			if (self.DATA.buffers[i].status.toLowerCase() === 'free') {
 				self.log('info', `Initialization: Recording to first free buffer: ${self.DATA.buffers[i].buffer}`)
 				self.record(self.DATA.buffers[i].buffer)
 				found = true
@@ -775,17 +843,17 @@ module.exports = {
 		}
 	},
 
-	recordStop: function () {
+	recordStop: function (autoPlay, buffer, speed, pos) {
 		let self = this
 
-		if (self.currentlyRecording == true) {
+		if (self.DATA.currentlyRecording == true) {
 			self.sendCommand('rec_stop')
-		}
-		else {
+		} else {
 			self.log('warn', 'Cannot stop recording when not recording.')
+			return
 		}
 
-		self.currentlyRecording = false //set to false after stopping
+		self.DATA.currentlyRecording = false //set to false after stopping
 		self.DATA.lastRecordingBuffer = self.DATA.currentRecordingBuffer
 		self.DATA.currentRecordingBuffer = 0 //set to 0 after stopping
 
@@ -799,11 +867,34 @@ module.exports = {
 			}
 		}
 
-		//if we are not playing anywhere else, automatically play this last recorded buffer at speed 0, after, say, 20ms
-		if (self.currentlyPlaying == false) {
-			setTimeout(() => {
-				self.play(self.DATA.lastRecordingBuffer, 0)
-			}, 20)
+		if (autoPlay == true) {
+			//if we are not playing anywhere else, automatically play this last recorded buffer at speed 0, after, say, 20ms
+			//if buffer is 0, then use the last recorded buffer
+			if (buffer == 0) {
+				buffer = self.DATA.lastRecordingBuffer || 1
+			} else if (buffer == 'used') {
+				//find the first buffer that has the status 'used'
+				let firstUsedBuffer = self.DATA.buffers.find((buf) => buf.status?.toLowerCase() === 'used')
+
+				if (firstUsedBuffer) {
+					buffer = firstUsedBuffer.buffer
+				} else {
+					self.log('warn', 'No buffers are currently in use, cannot auto play a buffer just yet.')
+					return
+				}
+			}
+
+			if (self.currentlyPlaying == false) {
+				self.log('info', `Auto-Playing Buffer ${buffer} at Speed ${speed} at Frame ${pos}.`)
+				setTimeout(() => {
+					self.play(buffer, speed, pos)
+				}, 20)
+			} else {
+				self.log(
+					'warn',
+					`Cannot auto-play when already playing. Buffer ${self.DATA.currentPlaybackBuffer} is currently playing.`,
+				)
+			}
 		}
 
 		self.checkFeedbacks()
@@ -813,10 +904,9 @@ module.exports = {
 	markInFrame: function (pos) {
 		let self = this
 
-		if (self.currentlyPlaying == true) {
-			self.sendCommand(`mark_in ${pos}`)	
-		}
-		else {
+		if (self.DATA.currentlyPlaying == true) {
+			self.sendCommand(`mark_in ${pos}`)
+		} else {
 			self.log('warn', 'Cannot mark in frame when not playing.')
 		}
 	},
@@ -824,10 +914,9 @@ module.exports = {
 	markOutFrame: function (pos) {
 		let self = this
 
-		if (self.currentlyPlaying == true) {
+		if (self.DATA.currentlyPlaying == true) {
 			self.sendCommand(`mark_out ${pos}`)
-		}
-		else {
+		} else {
 			self.log('warn', 'Cannot mark out frame when not playing.')
 		}
 	},
@@ -835,16 +924,17 @@ module.exports = {
 	changeMode: function (name, mode) {
 		let self = this
 
+		self.log('info', `Changing ${name} to ${mode}`)
+
 		self.sendCommand(`${name} ${mode}`)
 	},
 
 	seekToFrame: function (mode, pos) {
 		let self = this
 
-		if (self.currentlyPlaying == true) {
+		if (self.DATA.currentlyPlaying == true) {
 			self.sendCommand(`seek ${mode} ${pos} 0`)
-		}
-		else {
+		} else {
 			self.log('warn', 'Cannot seek to frame when not playing.')
 		}
 	},
@@ -852,33 +942,33 @@ module.exports = {
 	freeBuffer: function (buffer, startRecording = false) {
 		let self = this
 
-		self.log('info', `Freeing Buffer ${buffer}`)
+		console.log('*** old buffers array')
+		console.log(self.DATA.buffers)
 
-		if (buffer !== 0) { //if we are not freeing all buffers
+		if (buffer !== 0) {
+			//if we are not freeing all buffers
 			//first check if we are currently recording to the buffer
 			if (self.currentlyRecording == true && self.DATA.currentRecordingBuffer == buffer) {
-				self.log('warn', `Cannot free Buffer ${buffer} when recording to it.`)
+				self.log('warn', `Cannot free Buffer ${buffer} while currently recording to it.`)
 				return
 			}
-		}
-		else {
+		} else {
 			if (self.currentlyRecording == true) {
 				self.log('warn', `Cannot free all buffers when recording to one of them.`)
 				return
 			}
 		}
 
-		self.sendCommand(`free ${buffer}`)
-
-		//reset buffer pos data
-		for (let i = 0; i < self.DATA.buffers.length; i++) {
-			if (self.DATA.buffers[i].buffer === buffer || buffer == 0) {
-				self.DATA.buffers[i].pos = 0
-				self.DATA.buffers[i].speed = 0
-				self.DATA.buffers[i].markIn = 0
-				self.DATA.buffers[i].markOut = 0
-			}
+		//send the free command
+		if (buffer == 0) {
+			self.log('info', `Freeing All Buffers.`)
+		} else {
+			console.log('*** Freeing Buffer')
+			console.log(buffer)
+			self.log('info', `Freeing Buffer ${buffer}.`)
 		}
+
+		self.sendCommand(`free ${buffer}`)
 
 		//if we are freeing all buffers, reset the current recording buffer and current playback buffer
 		if (buffer == 0) {
@@ -886,8 +976,45 @@ module.exports = {
 			self.DATA.currentPlaybackBuffer = 0
 			self.DATA.currentlyRecording = false
 			self.DATA.currentlyPlaying = false
+
+			//reset buffer pos data
+			for (let i = 0; i < self.DATA.buffers.length; i++) {
+				self.DATA.buffers[i].pos = 0
+				self.DATA.buffers[i].speed = 0
+				self.DATA.buffers[i].markIn = 0
+				self.DATA.buffers[i].markOut = 0
+				self.DATA.buffers[i].status = 'Free'
+			}
+		} else {
+			//reset buffer pos data
+			for (let i = 0; i < self.DATA.buffers.length; i++) {
+				if (self.DATA.buffers[i].buffer === buffer) {
+					self.DATA.buffers[i].pos = 0
+					self.DATA.buffers[i].speed = 0
+					self.DATA.buffers[i].markIn = 0
+					self.DATA.buffers[i].markOut = 0
+					self.DATA.buffers[i].status = 'Free'
+					break
+				}
+			}
+
+			//if we are freeing a specific buffer, check if it was the last recording buffer
+			if (self.DATA.lastRecordingBuffer == buffer) {
+				self.DATA.lastRecordingBuffer = 0
+				self.DATA.currentlyRecording = false
+			}
+
+			//if we are freeing a specific buffer, check if it was the current playback buffer
+			if (self.DATA.currentPlaybackBuffer == buffer) {
+				self.DATA.currentPlaybackBuffer = 0
+				self.DATA.currentlyPlaying = false
+			}
 		}
 
+		console.log('*** new buffers array')
+		console.log(self.DATA.buffers)
+
+		self.checkFeedbacks()
 		self.checkVariables()
 
 		//if startRecording is true, start recording into the buffer after say 20ms
@@ -906,11 +1033,15 @@ module.exports = {
 	videoMode: function (mode) {
 		let self = this
 
+		self.log('info', `Changing Video Mode to ${mode}`)
+
 		self.sendCommand(`video_mode ${mode}`)
 	},
 
 	frameRateMode: function (mode) {
 		let self = this
+
+		self.log('info', `Changing Frame Rate Mode to ${mode}`)
 
 		self.sendCommand(`fps_mode ${mode}`)
 	},
@@ -918,11 +1049,18 @@ module.exports = {
 	phases: function (phases) {
 		let self = this
 
+		self.log('info', `Changing Phases to ${phases}`)
+
 		self.sendCommand(`phases ${phases}`)
 	},
 
 	changeNetworkSettings: function (networkType, ip, subnet, gateway) {
 		let self = this
+
+		self.log(
+			'info',
+			`Changing Network Settings to ${networkType} with IP: ${ip}, Subnet: ${subnet}, Gateway: ${gateway}`,
+		)
 
 		//if dhcp, only send dhcp command
 		if (networkType === 'dhcp') {
@@ -948,17 +1086,23 @@ module.exports = {
 	switchMode: function (mode) {
 		let self = this
 
+		self.log('info', `Switching Mode to ${mode}`)
+
 		self.sendCommand(`switch_mode ${mode}`)
 	},
 
 	reboot: function () {
 		let self = this
 
+		self.log('info', 'Rebooting Device.')
+
 		self.sendCommand('reboot')
 	},
 
 	shutdown: function () {
 		let self = this
+
+		self.log('info', 'Shutting Down Device.')
 
 		self.sendCommand('shutdown')
 	},

@@ -48,6 +48,8 @@ module.exports = {
 						case 'record':
 						case 'play':
 						case 'pause':
+						case 'other':
+						case 'offline':
 							if (bufferData.status.toLowerCase() == status) {
 								return true
 							}

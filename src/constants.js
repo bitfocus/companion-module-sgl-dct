@@ -48,6 +48,7 @@ module.exports = {
 		{ id: 'play', label: 'Play' },
 		{ id: 'pause', label: 'Pause' },
 		{ id: 'other', label: 'Other' },
+		{ id: 'offline', label: 'Offline' },
 	],
 
 	CHOICES_VIDEO_MODES: [

@@ -111,6 +111,13 @@ module.exports = {
 				default: false,
 			},
 			{
+				type: 'checkbox',
+				id: 'forceSequentialRecording',
+				label: 'Force Sequential Recording - Does not allow recording into a buffer that is not the next free buffer in sequence.',
+				width: 12,
+				default: false,
+			},
+			{
 				type: 'static-text',
 				id: 'hr2',
 				width: 12,

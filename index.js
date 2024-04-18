@@ -31,13 +31,14 @@ class DCTInstance extends InstanceBase {
 
 		this.RAMPINTERVAL = undefined
 
-		this.currentlyPlaying = false
-
 		this.DATA = {
 			buffers: [],
 			lastRecordingBuffer: 0,
 			currentRecordingBuffer: 0,
+			lastRecordingBuffer: 0,
+			currentlyRecording: false,
 			currentPlaybackBuffer: 0,
+			currentlyPlaying: false,
 			lastSpeed: 0,
 			recordingMode: '',
 			playbackMode: '',

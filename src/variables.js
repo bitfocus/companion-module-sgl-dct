@@ -67,7 +67,9 @@ module.exports = {
 			let frameRate = 1
 
 			//look up the frame rate in the CHOICES_FRAME_RATES array, if it exists, use the frame rate, otherwise use the mode
-			let frameRateMode = self.CHOICES_FRAME_RATE_MODES.find((rate) => rate.id.toString() === self.DATA.frameRateMode?.toString())
+			let frameRateMode = self.CHOICES_FRAME_RATE_MODES.find(
+				(rate) => rate.id.toString() === self.DATA.frameRateMode?.toString(),
+			)
 			if (frameRateMode) {
 				variableValues['frameRate'] = frameRateMode.label
 				frameRate = parseInt(frameRateMode.label)
@@ -80,38 +82,65 @@ module.exports = {
 				//loop through self.DATA.buffers and if the buffer number matches the current buffer, set the values
 				let buffer = self.DATA.buffers.find((buffer) => buffer.buffer === i)
 				if (buffer) {
+					let decimalPlaces = 1
 					variableValues[`bufferFramesRecorded_${i}`] = buffer.recorded
 					//calculate seconds recorded based on the amount recorded, the frame rate and speed
-					let secondsRecorded = Number.parseFloat((buffer.recorded / frameRate)/buffer.speed).toFixed(2);
+					let bufferSpeed = buffer.speed
+					if (buffer.speed == 0) {
+						//bufferSpeed = 0.000000000000000000000000000001
+					}
 
-
+					let secondsRecorded = (Number.parseFloat(buffer.recorded / frameRate / bufferSpeed) * 100).toFixed(
+						decimalPlaces,
+					)
 
 					if (isNaN(secondsRecorded)) {
 						secondsRecorded = 0
+					} else if (secondsRecorded == Infinity) {
+						secondsRecorded = ''
 					}
 					variableValues[`bufferSecondsRecorded_${i}`] = secondsRecorded
+
 					variableValues[`bufferFramesAvailable_${i}`] = buffer.available
-					let secondsAvailable = Number.parseFloat((buffer.available / frameRate)/buffer.speed).toFixed(2);
+
+					let secondsAvailable = (
+						Number.parseFloat(buffer.available / frameRate / bufferSpeed) * 100
+					).toFixed(decimalPlaces)
 					if (isNaN(secondsAvailable)) {
 						secondsAvailable = 0
+					} else if (secondsAvailable == Infinity) {
+						secondsAvailable = ''
 					}
 					variableValues[`bufferSecondsAvailable_${i}`] = secondsAvailable
+
 					variableValues[`bufferStatus_${i}`] = buffer.status
+
 					variableValues[`bufferPos_${i}`] = buffer.pos
-					let secondsPos = Number.parseFloat((buffer.pos / frameRate)/buffer.speed).toFixed(2);
+					let secondsPos = (Number.parseFloat(buffer.pos / frameRate / bufferSpeed) * 100).toFixed(
+						decimalPlaces,
+					)
 					if (isNaN(secondsPos)) {
 						secondsPos = 0
+					} else if (secondsPos == Infinity) {
+						secondsPos = ''
 					}
 					variableValues[`bufferPosSeconds_${i}`] = secondsPos
+
 					variableValues[`bufferSpeed_${i}`] = buffer.speed
+
 					variableValues[`bufferMarkIn_${i}`] = buffer.markIn
-					let secondsMarkIn = Number.parseFloat((buffer.markIn / frameRate)/buffer.speed).toFixed(2);
+					let secondsMarkIn = (Number.parseFloat(buffer.markIn / frameRate / bufferSpeed) * 100).toFixed(
+						decimalPlaces,
+					)
 					if (isNaN(secondsMarkIn)) {
 						secondsMarkIn = 0
 					}
 					variableValues[`bufferMarkInSeconds_${i}`] = secondsMarkIn
+
 					variableValues[`bufferMarkOut_${i}`] = buffer.markOut
-					let secondsMarkOut = Number.parseFloat((buffer.markOut / frameRate)/buffer.speed).toFixed(2);
+					let secondsMarkOut = (Number.parseFloat(buffer.markOut / frameRate / bufferSpeed) * 100).toFixed(
+						decimalPlaces,
+					)
 					if (isNaN(secondsMarkOut)) {
 						secondsMarkOut = 0
 					}

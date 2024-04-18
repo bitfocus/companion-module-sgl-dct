@@ -428,9 +428,150 @@ module.exports = {
 
 			actions.recordStop = {
 				name: 'Record Stop',
-				options: [],
-				callback: async function () {
-					self.recordStop()
+				options: [
+					{
+						type: 'checkbox',
+						label: 'Auto Play Buffer after Stopping',
+						id: 'autoPlay',
+						default: false,
+					},
+					{
+						type: 'static-text',
+						label: '',
+						id: 'hr1',
+						value: '<hr />',
+						isVisible: (options) => options.autoPlay === true,
+					},
+					{
+						type: 'checkbox',
+						label: 'Use Last Recorded Buffer',
+						id: 'lastRecorded',
+						default: true,
+						isVisible: (options) => options.autoPlay === true,
+					},
+					{
+						type: 'checkbox',
+						label: 'Use First Used Buffer',
+						id: 'useFirstUsed',
+						default: false,
+						isVisible: (options) => options.autoPlay == true && options.lastRecorded === false,
+					},
+					{
+						type: 'checkbox',
+						label: 'Choose Buffer by Variable Value',
+						id: 'chooseBufferByVariable',
+						default: false,
+						isVisible: (options) =>
+							options.autoPlay == true &&
+							options.lastRecorded === false &&
+							options.useFirstUsed === false,
+					},
+					{
+						type: 'textinput',
+						label: 'Buffer Number (1-4)',
+						id: 'bufferVar',
+						default: '0',
+						useVariables: true,
+						isVisible: (options) => options.autoPlay == true && options.chooseBufferByVariable === true,
+					},
+					{
+						type: 'dropdown',
+						label: 'Buffer',
+						id: 'buffer',
+						choices: self.CHOICES_BUFFERS,
+						default: self.CHOICES_BUFFERS[0].id,
+						required: true,
+						isVisible: (options) =>
+							options.autoPlay === true &&
+							options.lastRecorded === false &&
+							options.useFirstUsed === false &&
+							options.chooseBufferByVariable === false,
+					},
+					{
+						type: 'static-text',
+						label: '',
+						id: 'hr2',
+						value: '<hr />',
+						isVisible: (options) => options.autoPlay === true,
+					},
+					{
+						type: 'checkbox',
+						label: 'Use Custom Speed',
+						id: 'useCustomSpeed',
+						default: false,
+						isVisible: (options) => options.autoPlay === true,
+					},
+					{
+						type: 'textinput',
+						label: 'Speed (-1000 to 1000)',
+						id: 'customSpeed',
+						default: 10,
+						useVariables: true,
+						isVisible: (options) => options.useCustomSpeed === true && options.autoPlay === true,
+					},
+					{
+						type: 'dropdown',
+						label: 'Speed',
+						id: 'speed',
+						default: 10,
+						choices: self.CHOICES_SPEEDS,
+						isVisible: (options) => options.useCustomSpeed === false && options.autoPlay === true,
+					},
+					{
+						type: 'static-text',
+						label: '',
+						id: 'hr3',
+						value: '<hr />',
+						isVisible: (options) => options.autoPlay === true,
+					},
+					{
+						type: 'checkbox',
+						label: 'Specify Frame',
+						id: 'specifyFrame',
+						default: false,
+						isVisible: (options) => options.autoPlay === true,
+					},
+					{
+						type: 'textinput',
+						label: 'Frame',
+						id: 'frame',
+						default: 0,
+						useVariables: true,
+						isVisible: (options) => options.autoPlay == true && options.specifyFrame === true,
+					},
+				],
+				callback: async function (action) {
+					let buffer = undefined
+
+					let autoPlay = action.options.autoPlay
+
+					if (action.options.lastRecorded) {
+						buffer = 0
+					} else if (action.options.useFirstUsed) {
+						buffer = 'used'
+					} else if (action.options.chooseBufferByVariable) {
+						buffer = parseInt(await self.parseVariablesInString(action.options.bufferVar))
+					} else {
+						buffer = parseInt(action.options.buffer)
+					}
+
+					let speed = parseInt(action.options.speed)
+					let frame = parseInt(await self.parseVariablesInString(action.options.frame))
+
+					if (action.options.useCustomSpeed) {
+						speed = parseInt(await self.parseVariablesInString(action.options.customSpeed))
+					}
+
+					//make sure speed is between -1000 and 1000
+					speed = Math.min(1000, Math.max(-1000, speed))
+
+					if (!action.options.specifyFrame) {
+						frame = undefined
+					}
+
+					console.log('Record Stop', autoPlay, buffer, speed, frame)
+
+					self.recordStop(autoPlay, buffer, speed, frame)
 				},
 			}
 
@@ -610,7 +751,7 @@ module.exports = {
 						label: 'Start Recording into Buffer automatically',
 						id: 'startRecording',
 						default: false,
-					}
+					},
 				],
 				callback: async function (action) {
 					let buffer = 0
@@ -653,7 +794,7 @@ module.exports = {
 					label: 'Frame Rate',
 					id: 'frameRateMode',
 					choices: self.CHOICES_FRAME_RATE_MODES,
-					default: self.CHOICES_FRAME_RATE_MODES[0].id
+					default: self.CHOICES_FRAME_RATE_MODES[0].id,
 				},
 			],
 			callback: async function (action) {

@@ -5,22 +5,30 @@ This module will allow you to control SGL DCT Slow Motion cameras.
 ## Configuration Options:
 
 -   IP/Port of Device
--   Specify Recording Buffers (1-4)
--   Specify Record Mode (Loop, Once)
--   Specify Stop Mode (Live, Black, Color Bars)
+-   Specify Unused Buffer Variables Text
+-   Specify Recording, Playback, and Stop Modes
+-   Record into Earliest Free Buffer Upon Init
+-   Force Sequential Recording
+-   Enable Polling
+-   Enable Verbose Logging
 
 ## Actions:
 
--   Play/Pause/Rewind/Fast-Forward (Select Buffer: Based on config (1-4); Speed: (-100x - 100x) (optional); Specify Frame (optional))
+-   Set Buffer Count
+-   Play/Pause/Stop
+-   Increase/Decrease Play Speed
+-   Ramp Playback
 -   Record (Use Next Available or Specify Buffer)
 -   Record Stop
--   Mark In Frame (Use current position or specify position)
--   Mark Out Frame (Use current position or specify position)
--   Change Recording Mode (Loop, Once)
--   Change Playback Mode (Loop, Once)
--   Change Stop Mode (Live, Black, Color Bars)
--   Seek to Frame (Mode: Relative, Absolute; Position/Frames to seek)
--   Free Buffer (Select Buffer)
+-   Mark In Frame
+-   Mark Out Frame
+-   Change Recording Mode
+-   Change Playback Mode
+-   Change Stop Mode
+-   Seek to Frame
+-   Free Buffer(s)
+-   Set Video Mode
+-   Set Frame Rate Mode
 -   Change Networking Settings
 -   Switch Device Mode
 -   Reboot Device
