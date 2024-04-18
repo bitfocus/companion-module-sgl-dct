@@ -548,7 +548,7 @@ module.exports = {
 					if (action.options.lastRecorded) {
 						buffer = 0
 					} else if (action.options.useFirstUsed) {
-						buffer = 'used'
+						buffer = 'firstUsed'
 					} else if (action.options.chooseBufferByVariable) {
 						buffer = parseInt(await self.parseVariablesInString(action.options.bufferVar))
 					} else {

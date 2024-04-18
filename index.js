@@ -47,6 +47,8 @@ class DCTInstance extends InstanceBase {
 			currentPlaybackMarkerIn: 0,
 			currentPlaybackMarkerOut: 0,
 		}
+
+		this.commandQueue = []
 	}
 
 	async init(config) {
