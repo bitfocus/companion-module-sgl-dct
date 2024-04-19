@@ -6,6 +6,8 @@ module.exports = {
 	initConnection: function () {
 		let self = this
 
+		self.updateStatus(InstanceStatus.Connecting)
+
 		//clear the reconnect interval
 		clearTimeout(self.RECONNECT_INTERVAL)
 
@@ -19,6 +21,8 @@ module.exports = {
 
 			self.WS.on('error', (error) => {
 				console.log(error)
+
+				self.updateStatus(InstanceStatus.ConnectionFailure)
 
 				//stop polling
 				self.stopInterval()
@@ -360,7 +364,7 @@ module.exports = {
 		let self = this
 
 		self.lastStatus = statusArr
-		
+
 		for (let i = 0; i < statusArr.length; i++) {
 			//match this regex to get the buffer number and status
 			//[B](.):\s(....)\s\S\s(....)\s(....)
@@ -604,7 +608,8 @@ module.exports = {
 
 		if (frame !== undefined) {
 			self.queueCommand(`play ${buffer} ${speed} ${frame}`)
-		} else { //if no frame specified, just play from the beginning
+		} else {
+			//if no frame specified, just play from the beginning
 			self.queueCommand(`play ${buffer} ${speed}`)
 		}
 
@@ -976,30 +981,20 @@ module.exports = {
 	freeBuffer: function (buffer, startRecording = false) {
 		let self = this
 
-		if (buffer !== 0) {
-			//if we are not freeing all buffers
-			//first check if we are currently recording to the buffer
-			if (self.DATA.currentlyRecording == true && self.DATA.currentRecordingBuffer == buffer) {
-				self.log('warn', `Cannot free Buffer ${buffer} while currently recording to it.`)
-				return
-			}
-		} else {
+		if (buffer === 0) {
 			if (self.DATA.currentlyRecording == true) {
 				self.log('warn', `Cannot free all buffers when recording to one of them.`)
 				return
 			}
-		}
 
-		//send the free command
-		if (buffer === 0) {
 			self.log('info', `Freeing All Buffers.`)
 
-			self.queueCommand(`free ${buffer}`)
+			self.queueCommand(`free 0`) //free all
 
 			//if we are freeing all buffers, reset the current recording buffer and current playback buffer
 			self.DATA.currentRecordingBuffer = 0
-			self.DATA.currentPlaybackBuffer = 0
 			self.DATA.currentlyRecording = false
+			self.DATA.currentPlaybackBuffer = 0			
 			self.DATA.currentlyPlaying = false
 
 			//reset buffer pos data
@@ -1011,8 +1006,30 @@ module.exports = {
 				self.DATA.buffers[i].status = 'Free'
 			}
 		} else {
-			self.log('info', `Freeing Buffer ${buffer}.`)
+			//first check if we are currently recording to the buffer
+			if (self.DATA.currentlyRecording == true && self.DATA.currentRecordingBuffer == buffer) {
+				self.log('warn', `Cannot free Buffer ${buffer} while currently recording to it.`)
+				return
+			}
 
+			//check to make sure the requested buffer to free is not the current playback buffer
+			//if it is, issue a pause (play speed 0) command to another buffer that is currently paused, so that it becomes the current playback buffer
+			//if you don't do this, the camera will release all other buffers back to Used state
+
+			if (self.DATA.currentPlaybackBuffer == buffer) {
+				let pausedBuffer = self.DATA.buffers.find((bufferObj) => bufferObj.status.toLowerCase() === 'pause' && bufferObj.buffer !== buffer)
+
+				console.log('pausedBuffer', pausedBuffer)
+
+				if (pausedBuffer) {		
+					self.log('info', `Pausing Buffer ${pausedBuffer.buffer} to free Buffer ${buffer}.`)
+					self.queueCommand(`play ${pausedBuffer.buffer} 0 ${pausedBuffer.pos}`) //speed 0 at current position is a pause
+				} else {
+					self.log('warn', `Cannot find another paused buffer. All other buffers will return to Used state.`)
+				}
+			}
+
+			self.log('info', `Freeing Buffer ${buffer}.`)
 			self.queueCommand(`free ${buffer}`)
 
 			//reset buffer pos data
@@ -1025,12 +1042,6 @@ module.exports = {
 					self.DATA.buffers[i].status = 'Free'
 					break
 				}
-			}
-
-			//if we are freeing a specific buffer, check if it was the last recording buffer
-			if (self.DATA.lastRecordingBuffer == buffer) {
-				self.DATA.lastRecordingBuffer = 0
-				self.DATA.currentlyRecording = false
 			}
 
 			//if we are freeing a specific buffer, check if it was the current playback buffer
