@@ -22,16 +22,12 @@ module.exports = {
 			self.WS.on('error', (error) => {
 				console.log(error)
 
-				self.updateStatus(InstanceStatus.ConnectionFailure)
+				self.handleDisconnect()
+			})
 
-				//stop polling
-				self.stopInterval()
-
-				//try to reconnect after 10 seconds
-				self.log('warn', 'Connection Error. Attempting to reconnect in 10 seconds.')
-				self.RECONNECT_INTERVAL = setTimeout(() => {
-					self.initConnection()
-				}, 10000)
+			self.WS.on('close', () => {
+				self.log('warn', 'Connection Closed.')
+				self.handleDisconnect()
 			})
 
 			self.WS.on('open', () => {
@@ -60,6 +56,21 @@ module.exports = {
 				self.processData.bind(self)(data)
 			})
 		}
+	},
+
+	handleDisconnect: function () {
+		let self = this
+
+		self.updateStatus(InstanceStatus.ConnectionFailure)
+
+		//stop polling
+		self.stopInterval()
+
+		//try to reconnect after 10 seconds
+		self.log('warn', 'Connection Error. Attempting to reconnect in 10 seconds.')
+		self.RECONNECT_INTERVAL = setTimeout(() => {
+			self.initConnection()
+		}, 10000)
 	},
 
 	setBufferCount: function (count) {
@@ -139,6 +150,28 @@ module.exports = {
 		self.checkVariables() //check variables due to buffer size change
 
 		self.record(0, false) //record into the first free buffer
+	},
+
+	checkValidBuffer: function (buffer) {
+		//checks to make sure the buffer number is valid and within the range of the currently enabled buffers
+		let self = this
+
+		if (buffer === 0) {
+			return true
+		}
+
+		let valid = false
+		for (let i = 0; i < self.DATA.buffers.length; i++) {
+			if (self.DATA.buffers[i].buffer === buffer) {
+				//make sure the status is not offline
+				if (self.DATA.buffers[i].status.toLowerCase() !== 'offline') {
+					valid = true
+					break
+				}
+			}
+		}
+
+		return valid
 	},
 
 	getData: function () {
@@ -572,6 +605,12 @@ module.exports = {
 	play: function (buffer, speed, frame = undefined) {
 		let self = this
 
+		//validate the buffer number first
+		if (!self.checkValidBuffer(buffer)) {
+			self.log('warn', `Invalid buffer number: ${buffer}`)
+			return
+		}
+
 		if (buffer === 0) {
 			//determine the last recorded buffer to use
 			//but if that is 0, then just choose the first buffer I guess
@@ -646,6 +685,12 @@ module.exports = {
 		transitionTotalSteps,
 	) {
 		let self = this
+
+		//validate the buffer number first
+		if (!self.checkValidBuffer(buffer)) {
+			self.log('warn', `Invalid buffer number: ${buffer}`)
+			return
+		}
 
 		//first check to see if we are currently ramping somewhere
 		if (self.rampingMode) {
@@ -788,6 +833,12 @@ module.exports = {
 	record: function (buffer = 0, freeBuffer = false) {
 		let self = this
 
+		//validate the buffer number first
+		if (!self.checkValidBuffer(buffer)) {
+			self.log('warn', `Invalid buffer number: ${buffer}`)
+			return
+		}
+
 		if (buffer === 0) {
 			//if no buffer specified, first determine the first free buffer to record to
 			let found = false
@@ -880,6 +931,12 @@ module.exports = {
 
 	recordStop: function (autoPlay, buffer, speed, pos) {
 		let self = this
+
+		//validate the buffer number first
+		if (!self.checkValidBuffer(buffer)) {
+			self.log('warn', `Invalid buffer number: ${buffer}`)
+			return
+		}
 
 		if (self.DATA.currentlyRecording == true) {
 			self.queueCommand('rec_stop')
@@ -981,6 +1038,12 @@ module.exports = {
 	freeBuffer: function (buffer, startRecording = false) {
 		let self = this
 
+		//validate the buffer number first
+		if (!self.checkValidBuffer(buffer)) {
+			self.log('warn', `Invalid buffer number: ${buffer}`)
+			return
+		}
+
 		if (buffer === 0) {
 			if (self.DATA.currentlyRecording == true) {
 				self.log('warn', `Cannot free all buffers when recording to one of them.`)
@@ -994,7 +1057,7 @@ module.exports = {
 			//if we are freeing all buffers, reset the current recording buffer and current playback buffer
 			self.DATA.currentRecordingBuffer = 0
 			self.DATA.currentlyRecording = false
-			self.DATA.currentPlaybackBuffer = 0			
+			self.DATA.currentPlaybackBuffer = 0
 			self.DATA.currentlyPlaying = false
 
 			//reset buffer pos data
@@ -1017,11 +1080,13 @@ module.exports = {
 			//if you don't do this, the camera will release all other buffers back to Used state
 
 			if (self.DATA.currentPlaybackBuffer == buffer) {
-				let pausedBuffer = self.DATA.buffers.find((bufferObj) => bufferObj.status.toLowerCase() === 'pause' && bufferObj.buffer !== buffer)
+				let pausedBuffer = self.DATA.buffers.find(
+					(bufferObj) => bufferObj.status.toLowerCase() === 'pause' && bufferObj.buffer !== buffer,
+				)
 
 				console.log('pausedBuffer', pausedBuffer)
 
-				if (pausedBuffer) {		
+				if (pausedBuffer) {
 					self.log('info', `Pausing Buffer ${pausedBuffer.buffer} to free Buffer ${buffer}.`)
 					self.queueCommand(`play ${pausedBuffer.buffer} 0 ${pausedBuffer.pos}`) //speed 0 at current position is a pause
 				} else {
