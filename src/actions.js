@@ -205,7 +205,7 @@ module.exports = {
 			}
 
 			actions.rampPlay = {
-				name: 'Ramp Play (DO NOT USE YET)',
+				name: 'Ramp Play',
 				options: [
 					{
 						type: 'checkbox',
@@ -232,67 +232,33 @@ module.exports = {
 					},
 					{
 						type: 'textinput',
-						label: 'Start Speed',
+						label: 'Speed at beginning of Playback',
 						id: 'startSpeed',
-						default: 10,
+						default: 100,
 						useVariables: true,
 					},
 					{
 						type: 'textinput',
-						label: 'Start Frame',
+						label: 'Frame to begin Playback',
 						id: 'startFrame',
-						default: 0,
-						useVariables: true,
-					},
-					{
-						type: 'textinput',
-						label: 'Transition Time (in ms) from Ramp Frame to End Frame',
-						id: 'transitionTotalTime',
-						default: 1500,
+						default: 1,
 						useVariables: true,
 					},
 					{
 						type: 'dropdown',
-						label: 'Specify Time Between Steps, or Specify Total Steps',
+						label: 'Specify Ramping Mode',
 						id: 'transitionType',
 						default: 'time',
 						choices: [
-							{ id: 'time', label: 'Time Between Steps (Let Companion Calculate Total Steps)' },
-							{ id: 'steps', label: 'Total Steps (Let Companion Calculate Time Between Steps)' },
+							{ id: 'time', label: 'Total Transition Time (Let Companion Calculate Total Steps Between Ramp Start Speed and Ramp End Speed)' },
+							{ id: 'steps', label: 'Total Steps (Let Companion Calculate Total Transition Time by using Total Steps and Time per Step)' },
 						],
 					},
 					{
 						type: 'textinput',
-						label: 'Ramp Speed',
-						id: 'rampSpeed',
-						default: -10,
-					},
-					{
-						type: 'textinput',
-						label: 'Ramp Frame',
-						id: 'rampFrame',
-						default: 0,
-						useVariables: true,
-					},
-					{
-						type: 'textinput',
-						label: 'End Speed',
-						id: 'endSpeed',
-						default: -1000,
-						useVariables: true,
-					},
-					{
-						type: 'textinput',
-						label: 'End Frame',
-						id: 'endFrame',
-						default: 0,
-						useVariables: true,
-					},
-					{
-						type: 'textinput',
-						label: 'Time Between Steps (in ms)',
-						id: 'transitionStepTime',
-						default: 100,
+						label: 'Total Transition Time (in ms) from Ramp Frame to End Frame',
+						id: 'transitionTotalTime',
+						default: 1500,
 						useVariables: true,
 						isVisible: (options) => options.transitionType === 'time',
 					},
@@ -303,6 +269,42 @@ module.exports = {
 						default: 15,
 						useVariables: true,
 						isVisible: (options) => options.transitionType === 'steps',
+					},
+					{
+						type: 'textinput',
+						label: 'Time Per Step (in ms)',
+						id: 'transitionStepTime',
+						default: 100,
+						useVariables: true,
+						isVisible: (options) => options.transitionType === 'steps',
+					},
+					{
+						type: 'textinput',
+						label: 'Frame at which to begin Ramping',
+						id: 'rampFrame',
+						default: 0,
+						useVariables: true,
+					},
+					{
+						type: 'textinput',
+						label: 'Speed at Start of Ramp',
+						id: 'rampSpeed',
+						default: 100,
+					},
+					{
+						type: 'textinput',
+						label: 'End Speed',
+						id: 'endSpeed',
+						default: 10,
+						useVariables: true,
+					},
+					{
+						type: 'textinput',
+						label: 'End Frame',
+						id: 'endFrame',
+						default: 100,
+						useVariables: true,
+						isVisible: (options) => false
 					},
 				],
 				callback: async function (action) {
@@ -315,6 +317,12 @@ module.exports = {
 					let rampFrame = parseInt(await self.parseVariablesInString(action.options.rampFrame))
 
 					let endSpeed = parseInt(await self.parseVariablesInString(action.options.endSpeed))
+					let endFrame = parseInt(await self.parseVariablesInString(action.options.endFrame))
+
+					//ensure that all speeds are positive
+					startSpeed = Math.abs(startSpeed)
+					rampSpeed = Math.abs(rampSpeed)
+					endSpeed = Math.abs(endSpeed)
 
 					let transitionTotalTime = parseInt(
 						await self.parseVariablesInString(action.options.transitionTotalTime),
@@ -332,10 +340,12 @@ module.exports = {
 						buffer = self.DATA.currentPlaybackBuffer
 					}
 
+					let transitionType = action.options.transitionType
+
 					if (transitionType === 'time') {
-						transitionTotalSteps = ParseInt(Math.ceil(transitionTotalTime / transitionStepTime))
+						transitionTotalSteps = parseInt(Math.ceil(transitionTotalTime / transitionStepTime))
 					} else {
-						transitionStepTime = ParseInt(Math.ceil(transitionTotalTime / transitionTotalSteps))
+						transitionTotalTime = parseInt(Math.ceil(transitionStepTime * transitionTotalSteps))
 					}
 
 					self.rampPlay(
@@ -345,10 +355,11 @@ module.exports = {
 						rampSpeed,
 						rampFrame,
 						endSpeed,
-						transitionTotalTime,
+						endFrame,
 						transitionType,
-						transitionStepTime,
+						transitionTotalTime,
 						transitionTotalSteps,
+						transitionStepTime,
 					)
 				},
 			}
@@ -569,7 +580,7 @@ module.exports = {
 						frame = undefined
 					}
 
-					console.log('Record Stop', autoPlay, buffer, speed, frame)
+					//console.log('Record Stop', autoPlay, buffer, speed, frame)
 
 					self.recordStop(autoPlay, buffer, speed, frame)
 				},

@@ -646,9 +646,11 @@ module.exports = {
 		}
 
 		if (frame !== undefined) {
+			self.log('info', `Playing Buffer ${buffer} at Frame: ${frame} Speed: ${speed}`)
 			self.queueCommand(`play ${buffer} ${speed} ${frame}`)
 		} else {
 			//if no frame specified, just play from the beginning
+			self.log('info', `Playing Buffer ${buffer} at Speed: ${speed}`)
 			self.queueCommand(`play ${buffer} ${speed}`)
 		}
 
@@ -679,10 +681,11 @@ module.exports = {
 		rampSpeed,
 		rampFrame,
 		endSpeed,
-		transitionTotalTime,
+		endFrame,
 		transitionType,
-		transitionStepTime,
+		transitionTotalTime,
 		transitionTotalSteps,
+		transitionStepTime,
 	) {
 		let self = this
 
@@ -694,7 +697,7 @@ module.exports = {
 
 		//first check to see if we are currently ramping somewhere
 		if (self.rampingMode) {
-			self.log('warn', 'Ramping already in progress. Cannot start another ramp.')
+			self.log('warn', 'RAMP PLAY: Ramping already in progress. Cannot start another ramp.')
 			return
 		}
 
@@ -705,12 +708,12 @@ module.exports = {
 
 		self.log(
 			'info',
-			`Ramping Playback from Buffer ${buffer} at Frame: ${startFrame} Speed: ${startSpeed}, beginning Ramp at Frame: ${rampFrame} with Speed: ${rampSpeed} to end at Frame ${endFrame} Speed: ${endSpeed}.`,
+			`RAMP PLAY: Ramping Playback from Buffer ${buffer} at Frame: ${startFrame} Speed: ${startSpeed}, beginning Ramp at Frame: ${rampFrame} with Speed: ${rampSpeed} to end at Frame ${endFrame} Speed: ${endSpeed}.`,
 		)
 		if (transitionType == 'time') {
-			self.log('info', `Ramping over ${transitionTotalTime}ms.`)
+			self.log('info', `RAMP PLAY: Ramping over ${transitionTotalTime}ms.`)
 		} else if (transitionType == 'steps') {
-			self.log('info', `Ramping ${transitionTotalSteps} steps with a total time of ${transitionTotalTime}ms.`)
+			self.log('info', `RAMP PLAY: Ramping over ${transitionTotalSteps} steps.`)
 		}
 
 		if (buffer === 0) {
@@ -718,54 +721,128 @@ module.exports = {
 			buffer = self.DATA.lastRecordingBuffer
 		}
 
+		//make sure nothing is undefined for any reason
+		if (buffer === undefined) {
+			buffer = 1
+		}
+
 		self.DATA.currentPlaybackBuffer = buffer
 		self.DATA.lastSpeed = startSpeed
-		self.queueCommand(`play ${buffer} ${startSpeed} ${startFrame}`)
+		self.play(buffer, startSpeed, startFrame)
 		self.checkFeedbacks()
 		self.checkVariables()
 
 		self.rampingMode = true //set ramping mode to true to indicate in future attempts that we are ramping right now and should not do other ramps
 
 		//now start an interval to check the current frame position, and when it reaches or passes the rampFrame, change the speed and make a note that we are in ramping mode
-		let interval = setInterval(() => {
-			if (self.DATA.pos >= rampFrame) {
-				clearInterval(interval)
+		self.rampStartInterval = setInterval(() => {
+			//get buffer pos
+			let pos = -1
+			let bufferObj = self.DATA.buffers.find((bufferObj) => bufferObj.buffer === buffer)
+			if (bufferObj) {
+				pos = bufferObj.pos
+			} else {
+				self.log('warn', `RAMP PLAY: Buffer ${buffer} Position not found. Stopping Ramp.`)
+				self.stopRamp()
+				clearInterval(self.rampStartInterval)
+				self.rampStartInterval = undefined
+				return
+			}
+
+			if (pos >= rampFrame) {
+				clearInterval(self.rampStartInterval)
+				clearTimeout(self.rampCheckerTimeout)
+				self.rampCheckerTimeout = undefined
 				if (transitionType == 'time') {
-					self.startRampOverTime(buffer, rampSpeed, endSpeed, transitionTotalTime, transitionStepTime)
+					self.log('info', `RAMP PLAY: Starting Ramp Over Time.`)
+					self.startRampOverTime(buffer, rampSpeed, endSpeed, transitionTotalTime)
 				} else if (transitionType == 'steps') {
-					self.startRampOverSteps(buffer, rampSpeed, endSpeed, transitionTotalTime, transitionTotalSteps)
+					self.log('info', `RAMP PLAY: Starting Ramp Over Steps.`)
+					self.startRampOverSteps(buffer, rampSpeed, rampFrame, endSpeed, transitionTotalSteps, transitionStepTime)
 				}
 			}
-		}, 10) //check every 10ms
+			else {
+				self.log('debug', `RAMP PLAY: Waiting for Frame ${rampFrame} to begin ramping. Current Position: ${pos}`)
+				//check to see if it's been many interations of the interval and if we still haven't reached the rampFrame, then just stop the interval
+				//as in, the self.DATA.pos hasn't changed in, say, 5 seconds
+				if (pos == self.lastPos) {
+					if (self.rampCheckerTimeout ==  undefined) {
+						self.rampCheckerTimeout = setTimeout(() => {
+							self.log('warn', `RAMP PLAY: Frame Position has not moved from ${rampFrame} after 5 seconds. Stopping Ramp.`)
+							self.stopRamp()
+							clearTimeout(self.rampCheckerTimeout)
+							self.rampCheckerTimeout = undefined
+							clearInterval(self.rampStartInterval)
+							self.rampStartInterval = undefined
+						}, 5000)
+					}
+				}
+				else {
+					clearTimeout(self.rampCheckerTimeout)
+					self.rampCheckerTimeout = undefined
+				}
+			}
+			self.lastPos = pos
+		}, 500) //check every 10ms
 	},
 
 	startRampOverTime: function (
 		buffer,
 		rampSpeed,
-		rampFrame,
 		endSpeed,
-		endFrame,
-		transitionTotalTime,
-		transitionStepTime,
+		transitionTotalTime
 	) {
 		let self = this
 
-		//perform a ramp with each step taking transitionStepTime over transitionTotalTime, starting at rampFrame and rampSpeed and ending at endFrame and endSpeed
-		let totalSteps = transitionTotalTime / transitionStepTime
+		//figure out how many total steps we can fit into the total time by using the rampSpeed and endSpeed
+		let speedDiff = endSpeed - rampSpeed
+
 		let currentStep = 0
 		let currentSpeed = rampSpeed
-		let currentFrame = rampFrame
-		let speedStep = (endSpeed - rampSpeed) / totalSteps
-		let frameStep = (endFrame - rampFrame) / totalSteps
+
+		let transitionTotalSteps = Math.abs(parseInt(transitionTotalTime / speedDiff))
+
+		//calculate the speed difference per step
+		let speedDiffPerStep = parseInt(Math.floor(speedDiff / transitionTotalSteps))
+
+		//calculate the time between each step
+		let transitionStepTime = parseInt(transitionTotalTime / transitionTotalSteps)
+
+		
+
+		console.log('transitionTotalTime', transitionTotalTime)
+		console.log('speedDiff', speedDiff)
+		console.log('speedDiffPerStep', speedDiffPerStep)
+		console.log('transitionStepTime', transitionStepTime)
+		
+		console.log('transitionTotalSteps', transitionTotalSteps)
 
 		self.RAMPINTERVAL = setInterval(() => {
-			if (currentStep < totalSteps) {
-				currentSpeed += speedStep
-				self.queueCommand(`play ${buffer} ${currentSpeed}`)
+			console.log('currentStep', currentStep)
+			console.log(new Date())
+			if (currentStep < transitionTotalSteps) {
+				currentSpeed += speedDiffPerStep
+				//make sure the new current speed is some number between the rampSpeed and endSpeed
+				if (rampSpeed > endSpeed) {
+					if (currentSpeed < endSpeed) {
+						currentSpeed = endSpeed
+					}
+				}
+				else {
+					if (currentSpeed > endSpeed) {
+						currentSpeed = endSpeed
+					}
+				}
+
+				currentSpeed = parseInt(currentSpeed) //make sure it's an integer
+				self.log('info', `RAMP PLAY: Playing Buffer ${buffer} at Speed ${currentSpeed}`)
+				self.play(buffer, currentSpeed)
 				currentStep++
 			} else {
 				clearInterval(self.RAMPINTERVAL)
-				self.queueCommand(`play ${buffer} ${endSpeed} ${endFrame}`)
+				self.log('info', `RAMP PLAY: Finishing Playing Buffer ${buffer} at Speed ${endSpeed}`)
+				self.play(buffer, endSpeed)
+				self.log('info', 'RAMP PLAY: Ramp Complete.')
 				self.rampingMode = false
 			}
 		}, transitionStepTime)
@@ -774,40 +851,49 @@ module.exports = {
 	startRampOverSteps: function (
 		buffer,
 		rampSpeed,
-		rampFrame,
 		endSpeed,
-		endFrame,
-		transitionTotalTime,
 		transitionTotalSteps,
 	) {
 		let self = this
 
 		//perform a ramp with each step taking transitionStepTime over transitionTotalTime, starting at rampFrame and rampSpeed and ending at endFrame and endSpeed
-		let totalSteps = transitionTotalSteps
+
+
+
+		//figure out how many total steps we can fit into the total time by using the rampSpeed and endSpeed
+		let speedDiff = endSpeed - rampSpeed
+
 		let currentStep = 0
 		let currentSpeed = rampSpeed
-		let currentFrame = rampFrame
-		let speedStep = (endSpeed - rampSpeed) / totalSteps
-		let frameStep = (endFrame - rampFrame) / totalSteps
+
+		//calculate the speed difference per step
+		let speedDiffPerStep = parseInt(Math.floor(speedDiff / transitionTotalSteps))
+
+		//calculate the time between each step
+		let transitionStepTime = parseInt(transitionTotalTime / transitionTotalSteps)
+
+		//calculate total time for the ramp
+		let transitionTotalTime = transitionStepTime * transitionTotalSteps
 
 		self.RAMPINTERVAL = setInterval(() => {
-			if (currentStep < totalSteps) {
-				currentSpeed += speedStep
-				currentFrame += frameStep
-				self.queueCommand(`play ${buffer} ${currentSpeed} ${currentFrame}`)
+			if (currentStep < transitionTotalSteps) {
+				currentSpeed += speedDiffPerStep
+				self.log('debug', `RAMP PLAY: Playing Buffer ${buffer} at Speed ${currentSpeed}`)
+				self.play(buffer, currentSpeed)
 				currentStep++
 			} else {
 				clearInterval(self.RAMPINTERVAL)
-				self.queueCommand(`play ${buffer} ${endSpeed} ${endFrame}`)
+				self.log('debug', `RAMP PLAY: Finishing Playing Buffer ${buffer} at Speed ${endSpeed}`)
+				self.play(buffer, endSpeed)
 				self.rampingMode = false
 			}
-		}, transitionTotalTime / totalSteps)
+		}, transitionStepTime)
 	},
 
 	stopRamp: function () {
 		let self = this
 
-		self.log('info', 'Stopping Ramp.')
+		self.log('info', 'RAMP PLAY: Stopping Ramp.')
 		clearInterval(self.RAMPINTERVAL)
 		self.rampingMode = false
 	},
@@ -818,6 +904,8 @@ module.exports = {
 		self.queueCommand('pause')
 
 		self.DATA.currentlyPlaying = false //dont think we can call pos or mark_pos when paused
+
+		self.stopRamp()
 	},
 
 	stop: function () {
@@ -828,6 +916,8 @@ module.exports = {
 		self.queueCommand('stop')
 
 		self.DATA.currentlyPlaying = false
+
+		self.stopRamp()
 	},
 
 	record: function (buffer = 0, freeBuffer = false) {
@@ -932,12 +1022,6 @@ module.exports = {
 	recordStop: function (autoPlay, buffer, speed, pos) {
 		let self = this
 
-		//validate the buffer number first
-		if (!self.checkValidBuffer(buffer)) {
-			self.log('warn', `Invalid buffer number: ${buffer}`)
-			return
-		}
-
 		if (self.DATA.currentlyRecording == true) {
 			self.queueCommand('rec_stop')
 		} else {
@@ -977,6 +1061,12 @@ module.exports = {
 						self.log('warn', 'No buffers are currently in use, cannot auto play a buffer just yet.')
 						return
 					}
+				}
+
+				//validate the buffer number first
+				if (!self.checkValidBuffer(buffer)) {
+					self.log('warn', `Invalid buffer number: ${buffer}`)
+					return
 				}
 
 				if (self.DATA.currentlyPlaying == false) {
@@ -1084,7 +1174,11 @@ module.exports = {
 					(bufferObj) => bufferObj.status.toLowerCase() === 'pause' && bufferObj.buffer !== buffer,
 				)
 
-				console.log('pausedBuffer', pausedBuffer)
+				//console.log('buffer', buffer)
+
+				//console.log(self.DATA.buffers)
+
+				//console.log('pausedBuffer', pausedBuffer)
 
 				if (pausedBuffer) {
 					self.log('info', `Pausing Buffer ${pausedBuffer.buffer} to free Buffer ${buffer}.`)
