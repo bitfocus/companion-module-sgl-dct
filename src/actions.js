@@ -252,7 +252,24 @@ module.exports = {
 						choices: [
 							{ id: 'time', label: 'Total Transition Time (Let Companion Calculate Total Steps Between Ramp Start Speed and Ramp End Speed)' },
 							{ id: 'steps', label: 'Total Steps (Let Companion Calculate Total Transition Time by using Total Steps and Time per Step)' },
+							{ id: 'manual', label: 'Manual (Specify Step Difference and Time between Steps)'}
 						],
+					},
+					{
+						type: 'textinput',
+						label: 'Step Difference',
+						id: 'stepDifference',
+						default: 10,
+						useVariables: true,
+						isVisible: (options) => options.transitionType === 'manual',
+					},
+					{
+						type: 'textinput',
+						label: 'Time Between Steps (in ms)',
+						id: 'stepTime',
+						default: 100,
+						useVariables: true,
+						isVisible: (options) => options.transitionType === 'manual',
 					},
 					{
 						type: 'textinput',
@@ -310,57 +327,82 @@ module.exports = {
 				callback: async function (action) {
 					let buffer = parseInt(action.options.buffer)
 
-					let startSpeed = parseInt(await self.parseVariablesInString(action.options.startSpeed))
-					let startFrame = parseInt(await self.parseVariablesInString(action.options.startFrame))
-
-					let rampSpeed = parseInt(await self.parseVariablesInString(action.options.rampSpeed))
-					let rampFrame = parseInt(await self.parseVariablesInString(action.options.rampFrame))
-
-					let endSpeed = parseInt(await self.parseVariablesInString(action.options.endSpeed))
-					let endFrame = parseInt(await self.parseVariablesInString(action.options.endFrame))
-
-					//ensure that all speeds are positive
-					startSpeed = Math.abs(startSpeed)
-					rampSpeed = Math.abs(rampSpeed)
-					endSpeed = Math.abs(endSpeed)
-
-					let transitionTotalTime = parseInt(
-						await self.parseVariablesInString(action.options.transitionTotalTime),
-					)
-					let transitionStepTime = parseInt(
-						await self.parseVariablesInString(action.options.transitionStepTime),
-					)
-					let transitionTotalSteps = parseInt(
-						await self.parseVariablesInString(action.options.transitionTotalSteps),
-					)
-
-					if (action.options.lastRecorded) {
-						buffer = 0
-					} else if (action.options.useCurrentPlaybackBuffer) {
-						buffer = self.DATA.currentPlaybackBuffer
-					}
-
 					let transitionType = action.options.transitionType
 
-					if (transitionType === 'time') {
-						transitionTotalSteps = parseInt(Math.ceil(transitionTotalTime / transitionStepTime))
-					} else {
-						transitionTotalTime = parseInt(Math.ceil(transitionStepTime * transitionTotalSteps))
-					}
+					if (transitionType === 'manual') {
+						let stepDifference = parseInt(await self.parseVariablesInString(action.options.stepDifference))
+						let stepTime = parseInt(await self.parseVariablesInString(action.options.stepTime))
 
-					self.rampPlay(
-						buffer,
-						startSpeed,
-						startFrame,
-						rampSpeed,
-						rampFrame,
-						endSpeed,
-						endFrame,
-						transitionType,
-						transitionTotalTime,
-						transitionTotalSteps,
-						transitionStepTime,
-					)
+						let startSpeed = parseInt(await self.parseVariablesInString(action.options.startSpeed))
+						let startFrame = parseInt(await self.parseVariablesInString(action.options.startFrame))
+						
+						let rampSpeed = parseInt(await self.parseVariablesInString(action.options.rampSpeed))
+						let rampFrame = parseInt(await self.parseVariablesInString(action.options.rampFrame))
+
+						let endSpeed = parseInt(await self.parseVariablesInString(action.options.endSpeed))
+
+						//ensure that all speeds are positive
+						startSpeed = Math.abs(startSpeed)
+						rampSpeed = Math.abs(rampSpeed)
+						endSpeed = Math.abs(endSpeed)
+
+						//ensure frames are positive and greater than 0
+						startFrame = Math.max(1, startFrame)
+						rampFrame = Math.max(1, rampFrame)
+
+						self.rampPlayManual(buffer, startSpeed, startFrame, rampSpeed, rampFrame, endSpeed, stepDifference, stepTime)
+					}
+					else {
+						let startSpeed = parseInt(await self.parseVariablesInString(action.options.startSpeed))
+						let startFrame = parseInt(await self.parseVariablesInString(action.options.startFrame))
+	
+						let rampSpeed = parseInt(await self.parseVariablesInString(action.options.rampSpeed))
+						let rampFrame = parseInt(await self.parseVariablesInString(action.options.rampFrame))
+	
+						let endSpeed = parseInt(await self.parseVariablesInString(action.options.endSpeed))
+						let endFrame = parseInt(await self.parseVariablesInString(action.options.endFrame))
+	
+						//ensure that all speeds are positive
+						startSpeed = Math.abs(startSpeed)
+						rampSpeed = Math.abs(rampSpeed)
+						endSpeed = Math.abs(endSpeed)
+	
+						let transitionTotalTime = parseInt(
+							await self.parseVariablesInString(action.options.transitionTotalTime),
+						)
+						let transitionStepTime = parseInt(
+							await self.parseVariablesInString(action.options.transitionStepTime),
+						)
+						let transitionTotalSteps = parseInt(
+							await self.parseVariablesInString(action.options.transitionTotalSteps),
+						)
+	
+						if (action.options.lastRecorded) {
+							buffer = 0
+						} else if (action.options.useCurrentPlaybackBuffer) {
+							buffer = self.DATA.currentPlaybackBuffer
+						}
+	
+						if (transitionType === 'time') {
+							transitionTotalSteps = parseInt(Math.ceil(transitionTotalTime / transitionStepTime))
+						} else {
+							transitionTotalTime = parseInt(Math.ceil(transitionStepTime * transitionTotalSteps))
+						}
+	
+						self.rampPlay(
+							buffer,
+							startSpeed,
+							startFrame,
+							rampSpeed,
+							rampFrame,
+							endSpeed,
+							endFrame,
+							transitionType,
+							transitionTotalTime,
+							transitionTotalSteps,
+							transitionStepTime,
+						)
+					}
 				},
 			}
 

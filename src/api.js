@@ -674,6 +674,129 @@ module.exports = {
 		self.checkVariables()
 	},
 
+	rampPlayManual: function (
+		buffer,
+		startSpeed,
+		startFrame,
+		rampSpeed,
+		rampFrame,
+		endSpeed,
+		stepDifference,
+		stepTime
+	) {
+		let self = this
+
+		//validate the buffer number first
+		if (!self.checkValidBuffer(buffer)) {
+			self.log('warn', `Invalid buffer number: ${buffer}`)
+			return
+		}
+
+		//first check to see if we are currently ramping somewhere
+		if (self.rampingMode) {
+			self.log('warn', 'MANUAL RAMP PLAY: Ramping already in progress. Cannot start another ramp.')
+			return
+		}
+
+		//now set ramping mode to false
+		self.rampingMode = false
+		clearInterval(self.RAMPINTERVAL)
+		self.RAMPINTERVAL = undefined
+
+		self.log(
+			'info',
+			`MANUAL RAMP PLAY: Ramping Playback from Buffer ${buffer} at Frame: ${startFrame} Speed: ${startSpeed}, beginning Ramp at Frame: ${rampFrame} with Speed: ${rampSpeed} to end at Speed: ${endSpeed}.`,
+		)
+
+		self.log('info', `MANUAL RAMP PLAY: Step Difference: ${stepDifference} Step Time: ${stepTime}`)
+
+		if (buffer === 0) {
+			//determine the last recorded buffer to use
+			buffer = self.DATA.lastRecordingBuffer
+		}
+
+		//make sure nothing is undefined for any reason
+		if (buffer === undefined) {
+			buffer = 1
+		}
+
+		self.DATA.currentPlaybackBuffer = buffer
+		self.DATA.lastSpeed = startSpeed
+		self.play(buffer, startSpeed, startFrame)
+		self.checkFeedbacks()
+		self.checkVariables()
+
+		self.rampingMode = true //set ramping mode to true to indicate in future attempts that we are ramping right now and should not do other ramps
+
+		//now start an interval to check the current frame position, and when it reaches or passes the rampFrame, change the speed and make a note that we are in ramping mode
+		self.rampStartInterval = setInterval(() => {
+			//get buffer pos
+			let pos = -1
+			let bufferObj = self.DATA.buffers.find((bufferObj) => bufferObj.buffer === buffer)
+			if (bufferObj) {
+				pos = bufferObj.pos
+			} else {
+				self.log('warn', `MANUAL RAMP PLAY: Buffer ${buffer} Position not found. Stopping Ramp.`)
+				self.stopRamp()
+				clearInterval(self.rampStartInterval)
+				self.rampStartInterval = undefined
+				return
+			}
+
+			if (pos >= rampFrame) {
+				clearInterval(self.rampStartInterval)
+				clearTimeout(self.rampCheckerTimeout)
+				self.rampCheckerTimeout = undefined
+				self.startManualRamp(buffer, rampSpeed, endSpeed, stepDifference, stepTime)
+			}
+			else {
+				self.log('debug', `RAMP PLAY: Waiting for Frame ${rampFrame} to begin ramping. Current Position: ${pos}`)
+				//check to see if it's been many interations of the interval and if we still haven't reached the rampFrame, then just stop the interval
+				//as in, the self.DATA.pos hasn't changed in, say, 5 seconds
+				if (pos == self.lastPos) {
+					if (self.rampCheckerTimeout ==  undefined) {
+						self.rampCheckerTimeout = setTimeout(() => {
+							self.log('warn', `RAMP PLAY: Frame Position has not moved from ${rampFrame} after 5 seconds. Stopping Ramp.`)
+							self.stopRamp()
+							clearTimeout(self.rampCheckerTimeout)
+							self.rampCheckerTimeout = undefined
+							clearInterval(self.rampStartInterval)
+							self.rampStartInterval = undefined
+						}, 5000)
+					}
+				}
+				else {
+					clearTimeout(self.rampCheckerTimeout)
+					self.rampCheckerTimeout = undefined
+				}
+			}
+			self.lastPos = pos
+		}, 500) //check every 10ms
+	},
+
+	startManualRamp: function (buffer, rampSpeed, endSpeed, stepDifference, stepTime) {
+		let self = this
+
+		//perform a ramp starting at speed rampSpeed, ending at endSpeed, subtracing stepDifference each step, and taking stepTime between each step
+
+		let currentSpeed = rampSpeed
+
+		console.log('currentSpeed', currentSpeed)
+
+		self.RAMPINTERVAL = setInterval(() => {
+			if (currentSpeed > endSpeed) {
+				currentSpeed -= stepDifference
+				self.log('debug', `MANUAL RAMP PLAY: Playing Buffer ${buffer} at Speed ${currentSpeed}`)
+				self.play(buffer, currentSpeed)
+			} else {
+				clearInterval(self.RAMPINTERVAL)
+				self.log('debug', `MANUAL RAMP PLAY: Finishing Playing Buffer ${buffer} at Speed ${endSpeed}`)
+				self.play(buffer, endSpeed)
+				self.rampingMode = false
+			}
+		}, stepTime)
+	},
+
 	rampPlay: function (
 		buffer,
 		startSpeed,
